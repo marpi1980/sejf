@@ -19,8 +19,6 @@ jobs:
   windows:
     name: Program na Windows
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -50,16 +48,6 @@ jobs:
           path: |
             dist/Sejf.exe
             test-results/
-      - name: Zrzuty do gałęzi ci-zrzuty (tymczasowe)
-        if: always() && github.ref == 'refs/heads/gui'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/z" && cp -r test-results/. "$RUNNER_TEMP/z/" || true
-          cd "$RUNNER_TEMP/z" && git init -q && git add -A
-          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm zrzuty
-          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci-zrzuty
 
   web:
     name: Wersja w przeglądarce

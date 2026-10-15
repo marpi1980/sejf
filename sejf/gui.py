@@ -335,7 +335,7 @@ class MainView(ttk.Frame):
             w = self.paned.winfo_width()
             left = self.app.px(210)
             self.paned.sashpos(0, left)
-            self.paned.sashpos(1, left + max(self.app.px(300), int((w - left) * 0.45)))
+            self.paned.sashpos(1, left + max(self.app.px(300), int((w - left) * 0.42)))
         except tk.TclError:
             pass
 
@@ -572,7 +572,7 @@ class DetailPanel(ttk.Frame):
             bf.grid(row=row, column=2, sticky="e", padx=(8, 0))
             btns = []
             for text, cmd in buttons:
-                btn = ttk.Button(bf, text=text, command=cmd, width=8)
+                btn = ttk.Button(bf, text=text, command=cmd)
                 btn.pack(side="left", padx=(4, 0))
                 btns.append(btn)
             row += 1
@@ -1047,7 +1047,7 @@ class App:
         disp = next((f for f in ("Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI") if f in fams), ui)
         mono = next((f for f in ("Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Courier New") if f in fams), "TkFixedFont")
         self.base_font = tkfont.Font(family=ui, size=10)
-        self.mono = tkfont.Font(family=mono, size=11)
+        self.mono = tkfont.Font(family=mono, size=10)
         self.mono_big = tkfont.Font(family=mono, size=14)
         self.f_title = tkfont.Font(family=disp, size=16, weight="bold")
         self.f_hero = tkfont.Font(family=disp, size=24, weight="bold")
@@ -1096,7 +1096,8 @@ class App:
 
     def card(self, parent, padding):
         """Ramka z cienką obwódką; zwraca (zewnętrzną, wewnętrzną) ramkę."""
-        outer = tk.Frame(parent, bg=self.bg(), highlightthickness=1, highlightbackground=self.colors["empty"], bd=0)
+        outer = tk.Frame(parent, bg=self.bg(), highlightthickness=1, highlightbackground=self.colors["empty"],
+                         highlightcolor=self.colors["empty"], bd=0, takefocus=0)
         inner = ttk.Frame(outer, padding=padding)
         inner.pack(fill="both", expand=True)
         return outer, inner
