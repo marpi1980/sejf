@@ -49,7 +49,7 @@ class GuiFlow(unittest.TestCase):
         messagebox.showinfo = lambda *a, **k: "ok"
         from sejf.gui import App
         self.root = tk.Tk()
-        self.root.geometry("1240x760+20+20")
+        self.root.geometry("1000x700+0+0")
         self.root.attributes("-topmost", True)
         self.app = App(self.root)
         self.pump()

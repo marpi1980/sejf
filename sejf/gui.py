@@ -131,17 +131,17 @@ class LockScreen(ttk.Frame):
     def __init__(self, app, mode: str, message: str = ""):
         super().__init__(app.root)
         self.app = app
-        card = ttk.Frame(self, style="Card.TFrame", padding=32)
-        card.place(relx=0.5, rely=0.46, anchor="center")
-        head = ttk.Frame(card, style="Card.TFrame")
+        outer, card = app.card(self, 32)
+        outer.place(relx=0.5, rely=0.46, anchor="center")
+        head = ttk.Frame(card)
         head.pack(fill="x")
-        ttk.Label(head, image=app.icon, style="Card.TLabel").pack(side="left")
-        t = ttk.Frame(head, style="Card.TFrame")
+        ttk.Label(head, image=app.icon).pack(side="left")
+        t = ttk.Frame(head)
         t.pack(side="left", padx=(16, 0))
         ttk.Label(t, text="Sejf", style="Hero.TLabel").pack(anchor="w")
-        ttk.Label(t, text="Twoje hasła w zaszyfrowanym pliku,\nktóry trzymasz u siebie.", style="CardMuted.TLabel",
+        ttk.Label(t, text="Twoje hasła w zaszyfrowanym pliku,\nktóry trzymasz u siebie.", style="Muted.TLabel",
                   justify="left").pack(anchor="w")
-        self.body = ttk.Frame(card, style="Card.TFrame", width=360)
+        self.body = ttk.Frame(card, width=360)
         self.body.pack(fill="x", pady=(24, 0))
         self.message = message
         {"home": self.show_home, "unlock": self.show_unlock, "create": self.show_create}[mode]()
@@ -150,7 +150,7 @@ class LockScreen(ttk.Frame):
         for w in self.body.winfo_children():
             w.destroy()
 
-    def _note(self, text, style="CardMuted.TLabel"):
+    def _note(self, text, style="Muted.TLabel"):
         lbl = ttk.Label(self.body, text=text, style=style, wraplength=360, justify="left")
         lbl.pack(fill="x", pady=(12, 0))
         return lbl
@@ -174,24 +174,25 @@ class LockScreen(ttk.Frame):
     def show_unlock(self):
         self._clear()
         path = self.app.last_path or ""
-        chip = ttk.Frame(self.body, style="Card.TFrame")
+        chip = ttk.Frame(self.body)
         chip.pack(fill="x")
-        ttk.Label(chip, text="Plik:", style="CardMuted.TLabel").pack(side="left")
-        ttk.Label(chip, text=os.path.basename(path), style="CardMono.TLabel").pack(side="left", padx=(6, 0))
-        ttk.Label(self.body, text=os.path.dirname(path), style="CardSmall.TLabel", wraplength=360).pack(anchor="w")
-        ttk.Label(self.body, text="Hasło główne", style="CardField.TLabel").pack(anchor="w", pady=(16, 4))
+        ttk.Label(chip, text="Plik:", style="Muted.TLabel").pack(side="left")
+        ttk.Label(chip, text=os.path.basename(path), style="Mono.TLabel").pack(side="left", padx=(6, 0))
+        ttk.Label(self.body, text=os.path.dirname(path), style="Small.TLabel", wraplength=360).pack(anchor="w")
+        ttk.Label(self.body, text="Hasło główne", style="Field.TLabel").pack(anchor="w", pady=(16, 4))
         self.pw = tk.StringVar()
         self.pw_entry = ttk.Entry(self.body, textvariable=self.pw, show="•", width=40)
         self.pw_entry.pack(fill="x")
         self.pw_entry.bind("<Return>", lambda e: self.unlock())
+        self.pw.trace_add("write", lambda *a: self.err.configure(text="") if self.err.cget("text") and not self.message else None)
         self.show_pw = tk.BooleanVar()
         ttk.Checkbutton(self.body, text="Pokaż hasło", variable=self.show_pw,
                         command=lambda: self.pw_entry.configure(show="" if self.show_pw.get() else "•")).pack(anchor="w", pady=(6, 0))
-        self.err = ttk.Label(self.body, text=self.message, style="CardError.TLabel", wraplength=360)
+        self.err = ttk.Label(self.body, text=self.message, style="Error.TLabel", wraplength=360)
         self.err.pack(fill="x", pady=(6, 0))
         self.btn = ttk.Button(self.body, text="Odblokuj", style="Accent.TButton", command=self.unlock)
         self.btn.pack(fill="x", pady=(8, 0), ipady=3)
-        links = ttk.Frame(self.body, style="Card.TFrame")
+        links = ttk.Frame(self.body)
         links.pack(fill="x", pady=(10, 0))
         ttk.Button(links, text="Inny plik…", command=self.pick_file).pack(side="left")
         ttk.Button(links, text="Nowy sejf…", command=self.show_create).pack(side="right")
@@ -221,25 +222,23 @@ class LockScreen(ttk.Frame):
     # --- nowy sejf --------------------------------------------------------------
     def show_create(self):
         self._clear()
-        ttk.Label(self.body, text="Nowy sejf", style="CardTitle.TLabel").pack(anchor="w")
-        ttk.Label(self.body, text="Hasło główne", style="CardField.TLabel").pack(anchor="w", pady=(12, 4))
+        ttk.Label(self.body, text="Nowy sejf", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(self.body, text="Hasło główne", style="Field.TLabel").pack(anchor="w", pady=(12, 4))
         self.n1, self.n2 = tk.StringVar(), tk.StringVar()
         e1 = ttk.Entry(self.body, textvariable=self.n1, show="•", width=40)
         e1.pack(fill="x")
         self.meter = StrengthBar(self.body, self.app, "Co najmniej 8 znaków. Najlepiej kilka słów.")
-        self.meter.configure(style="Card.TFrame")
-        self.meter.canvas.configure(bg=self.app.card_bg())
-        self.meter.label.configure(style="CardMuted.TLabel")
         self.meter.pack(anchor="w", pady=(6, 0))
-        self.n1.trace_add("write", lambda *a: self.meter.set(self.n1.get()))
-        ttk.Label(self.body, text="Powtórz hasło główne", style="CardField.TLabel").pack(anchor="w", pady=(12, 4))
+        self.n1.trace_add("write", lambda *a: (self.meter.set(self.n1.get()), self.err.configure(text="")))
+        ttk.Label(self.body, text="Powtórz hasło główne", style="Field.TLabel").pack(anchor="w", pady=(12, 4))
         e2 = ttk.Entry(self.body, textvariable=self.n2, show="•", width=40)
         e2.pack(fill="x")
         e2.bind("<Return>", lambda e: self.create())
-        self.err = ttk.Label(self.body, text="", style="CardError.TLabel", wraplength=360)
+        self.n2.trace_add("write", lambda *a: self.err.configure(text=""))
+        self.err = ttk.Label(self.body, text="", style="Error.TLabel", wraplength=360)
         self.err.pack(fill="x", pady=(6, 0))
         self._note("Hasła głównego nie da się odzyskać. Jeśli je zapomnisz, stracisz dostęp do wszystkich haseł "
-                   "w sejfie.", style="CardWarn.TLabel")
+                   "w sejfie.", style="Warn.TLabel")
         self.btn = ttk.Button(self.body, text="Wybierz miejsce i utwórz sejf…", style="Accent.TButton", command=self.create)
         self.btn.pack(fill="x", pady=(14, 0), ipady=3)
         ttk.Button(self.body, text="Wróć", command=self.show_unlock if self.app.last_path else self.show_home).pack(anchor="w", pady=(10, 0))
@@ -303,6 +302,12 @@ class MainView(ttk.Frame):
 
         # lista
         list_box = ttk.Frame(self.paned)
+        lh = ttk.Frame(list_box)
+        lh.pack(side="top", fill="x", pady=(0, 6))
+        self.list_title = ttk.Label(lh, style="Strong.TLabel")
+        self.list_title.pack(side="left")
+        self.list_count = ttk.Label(lh, style="Muted.TLabel")
+        self.list_count.pack(side="right")
         self.list = ttk.Treeview(list_box, columns=("title", "user", "cat"), show="headings", selectmode="browse")
         for col, text, w in (("title", "Nazwa", 200), ("user", "Login", 170), ("cat", "Kategoria", 120)):
             self.list.heading(col, text=text, anchor="w")
@@ -328,8 +333,9 @@ class MainView(ttk.Frame):
     def _init_sashes(self):
         try:
             w = self.paned.winfo_width()
-            self.paned.sashpos(0, self.app.px(210))
-            self.paned.sashpos(1, max(self.app.px(560), int(w * 0.48)))
+            left = self.app.px(210)
+            self.paned.sashpos(0, left)
+            self.paned.sashpos(1, left + max(self.app.px(300), int((w - left) * 0.45)))
         except tk.TclError:
             pass
 
@@ -390,7 +396,8 @@ class MainView(ttk.Frame):
         title = {"all": "Wszystkie", "fav": "Ulubione", "none": "Bez kategorii"}.get(self.kind, self.value)
         if self.kind == "tag":
             title = "#" + self.value
-        self.list.heading("title", text=f"Nazwa  ·  {title}: {vault.wpisy(len(items))}")
+        self.list_title.configure(text=title)
+        self.list_count.configure(text=vault.wpisy(len(items)))
         if keep_detail and self.detail.editing is None and current and self.list.exists(current):
             self.detail.show(self.entry(current))
 
@@ -557,8 +564,9 @@ class DetailPanel(ttk.Frame):
         def field(label, value, buttons=(), secret=False):
             nonlocal row
             ttk.Label(grid, text=label.upper(), style="Field.TLabel").grid(row=row, column=0, sticky="w", pady=6, padx=(0, 14))
-            var = tk.StringVar(value=value or "—")
-            ent = ttk.Entry(grid, textvariable=var, state="readonly", font=self.app.mono, show="•" if secret and value else "")
+            ent = ttk.Entry(grid, font=self.app.mono, show="•" if secret and value else "")
+            ent.insert(0, value or "—")
+            ent.configure(state="readonly")
             ent.grid(row=row, column=1, sticky="ew", pady=6)
             bf = ttk.Frame(grid)
             bf.grid(row=row, column=2, sticky="e", padx=(8, 0))
@@ -582,7 +590,7 @@ class DetailPanel(ttk.Frame):
             pw_ent, (show_btn, _) = field("Hasło", e["password"], [("Pokaż", toggle), ("Kopiuj", lambda: self.app.copy(e["password"], "hasło", secret=True))], secret=True)
             meter = StrengthBar(grid, self.app)
             meter.set(e["password"])
-            meter.grid(row=row, column=1, sticky="w", pady=(0, 4))
+            meter.grid(row=row, column=1, columnspan=2, sticky="w", pady=(0, 4))
             row += 1
             reused = vault.reused_by(self.app.s.data, e)
             if reused:
@@ -812,8 +820,8 @@ class ImportDialog(Dialog):
         self.preview = preview
         b = self.body
         ttk.Label(b, text="Import z pliku CSV", style="Title.TLabel").pack(anchor="w")
-        info = ttk.Frame(b, style="Card.TFrame", padding=14)
-        info.pack(fill="x", pady=(12, 0))
+        box, info = app.card(b, 14)
+        box.pack(fill="x", pady=(12, 0))
         dups = preview.found - len(preview.fresh)
         lines = [("Plik", os.path.basename(preview.path)), ("Format", preview.fmt),
                  ("Znaleziono", vault.wpisy(preview.found))]
@@ -821,8 +829,8 @@ class ImportDialog(Dialog):
             lines.append(("Pominę powtórzenia", str(dups)))
         lines.append(("Do dodania", vault.wpisy(len(preview.fresh))))
         for i, (k, v) in enumerate(lines):
-            ttk.Label(info, text=k, style="CardMuted.TLabel").grid(row=i, column=0, sticky="w", padx=(0, 18), pady=1)
-            ttk.Label(info, text=v, style="CardStrong.TLabel").grid(row=i, column=1, sticky="w", pady=1)
+            ttk.Label(info, text=k, style="Muted.TLabel").grid(row=i, column=0, sticky="w", padx=(0, 18), pady=1)
+            ttk.Label(info, text=v, style="Strong.TLabel").grid(row=i, column=1, sticky="w", pady=1)
         self.cat = tk.StringVar(value="Zaimportowane")
         if any(not e["category"] for e in preview.fresh):
             ttk.Label(b, text="KATEGORIA DLA WPISÓW BEZ KATEGORII", style="Field.TLabel").pack(anchor="w", pady=(16, 4))
@@ -854,10 +862,10 @@ class ExportDialog(Dialog):
             ("Plik CSV bez szyfrowania", "Do przeniesienia haseł do innego programu. Każdy, kto otworzy\n"
              "ten plik, zobaczy wszystkie hasła.", "Zapisz CSV…", app.export_csv, "TButton"),
         ):
-            card = ttk.Frame(b, style="Card.TFrame", padding=16)
-            card.pack(fill="x", pady=(0, 12))
-            ttk.Label(card, text=title, style="CardStrong.TLabel").pack(anchor="w")
-            ttk.Label(card, text=text, style="CardMuted.TLabel", justify="left").pack(anchor="w", pady=(4, 10))
+            box, card = app.card(b, 16)
+            box.pack(fill="x", pady=(0, 12))
+            ttk.Label(card, text=title, style="Strong.TLabel").pack(anchor="w")
+            ttk.Label(card, text=text, style="Muted.TLabel", justify="left").pack(anchor="w", pady=(4, 10))
             ttk.Button(card, text=btn, style=style, command=lambda c=cmd: (self.close(), c())).pack(anchor="w")
         ttk.Button(b, text="Zamknij", command=self.close).pack(anchor="e")
 
@@ -940,8 +948,10 @@ class HistoryDialog(Dialog):
         for h in e["history"]:
             r = ttk.Frame(b)
             r.pack(fill="x", pady=3)
-            var = tk.StringVar(value=h["password"])
-            ttk.Entry(r, textvariable=var, state="readonly", font=app.mono, width=30).pack(side="left")
+            ent = ttk.Entry(r, font=app.mono, width=30)
+            ent.insert(0, h["password"])
+            ent.configure(state="readonly")
+            ent.pack(side="left")
             ttk.Label(r, text=vault.fmt_date(h.get("changed", "")), style="Muted.TLabel").pack(side="left", padx=10)
             ttk.Button(r, text="Kopiuj", command=lambda p=h["password"]: app.copy(p, "hasło", secret=True)).pack(side="right")
         ttk.Button(b, text="Zamknij", command=self.close).pack(anchor="e", pady=(14, 0))
@@ -1063,22 +1073,15 @@ class App:
         st = ttk.Style(self.root)
         c = self.colors
         bg = self.bg()
-        card = self.card_bg()
         st.configure("Title.TLabel", font=self.f_title)
-        st.configure("Hero.TLabel", font=self.f_hero, background=card)
+        st.configure("Hero.TLabel", font=self.f_hero)
         st.configure("Muted.TLabel", foreground=c["muted"])
         st.configure("Small.TLabel", foreground=c["muted"], font=self.f_small)
         st.configure("Field.TLabel", foreground=c["muted"], font=self.f_field)
         st.configure("Strong.TLabel", font=self.f_strong)
+        st.configure("Mono.TLabel", font=self.mono)
         st.configure("Error.TLabel", foreground=c["error"])
         st.configure("Warn.TLabel", foreground=c["warn"])
-        for name, extra in (("Card", {}), ("CardMuted", {"foreground": c["muted"]}),
-                            ("CardSmall", {"foreground": c["muted"], "font": self.f_small}),
-                            ("CardField", {"foreground": c["muted"], "font": self.f_field}),
-                            ("CardTitle", {"font": self.f_title}), ("CardStrong", {"font": self.f_strong}),
-                            ("CardMono", {"font": self.mono}), ("CardError", {"foreground": c["error"]}),
-                            ("CardWarn", {"foreground": c["warn"]})):
-            st.configure(f"{name}.TLabel", background=card, **extra)
         st.configure("Treeview", rowheight=self.px(30))
         self.root.configure(background=bg)
 
@@ -1091,12 +1094,12 @@ class App:
         except tk.TclError:
             return "#fafafa"
 
-    def card_bg(self):
-        try:
-            v = ttk.Style(self.root).lookup("Card.TFrame", "background")
-        except tk.TclError:
-            v = ""
-        return v or ("#2b2b2b" if self.dark else "#ffffff")
+    def card(self, parent, padding):
+        """Ramka z cienką obwódką; zwraca (zewnętrzną, wewnętrzną) ramkę."""
+        outer = tk.Frame(parent, bg=self.bg(), highlightthickness=1, highlightbackground=self.colors["empty"], bd=0)
+        inner = ttk.Frame(outer, padding=padding)
+        inner.pack(fill="both", expand=True)
+        return outer, inner
 
     def set_theme(self, mode: str):
         self.cfg["theme"] = mode
