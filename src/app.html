@@ -1,0 +1,1068 @@
+<title>Sejf</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sora:wght@500;600;700&display=swap">
+<style>
+/* Układ: ekran blokady z tarczą sejfu → trzy kolumny (filtry · lista · szczegóły), na telefonie jedna kolumna z nakładką szczegółów. */
+:root {
+  --bg: #e9eeec; --surface: #ffffff; --surface-2: #f3f6f5; --line: #d3dbd8; --line-strong: #b9c4c0;
+  --fg: #15201c; --muted: #5a6763; --accent: #1b5b48; --accent-hover: #164c3c; --accent-fg: #ffffff;
+  --accent-soft: #dcebe4; --brass: #94702c; --ok: #2b7a4b; --warn: #a76400; --bad: #b3261e; --bad-soft: #f8e1df;
+  --tile-l: 88%; --tile-fg-l: 26%; --shadow: 0 1px 2px rgb(20 40 33 / .06), 0 8px 24px rgb(20 40 33 / .07);
+  --f-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1311; --surface: #151d1a; --surface-2: #1b2521; --line: #27332f; --line-strong: #3a4843;
+  --fg: #e3ebe7; --muted: #93a29c; --accent: #5cbf99; --accent-hover: #74ccaa; --accent-fg: #06231a;
+  --accent-soft: #1a352b; --brass: #d3aa5c; --ok: #5cc489; --warn: #e3a447; --bad: #f2786d; --bad-soft: #3a1d1b;
+  --tile-l: 24%; --tile-fg-l: 82%; --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .25);
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1311; --surface: #151d1a; --surface-2: #1b2521; --line: #27332f; --line-strong: #3a4843;
+  --fg: #e3ebe7; --muted: #93a29c; --accent: #5cbf99; --accent-hover: #74ccaa; --accent-fg: #06231a;
+  --accent-soft: #1a352b; --brass: #d3aa5c; --ok: #5cc489; --warn: #e3a447; --bad: #f2786d; --bad-soft: #3a1d1b;
+  --tile-l: 24%; --tile-fg-l: 82%; --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .25);
+  color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--f-body); -webkit-font-smoothing: antialiased; }
+#app { height: 100%; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-ligatures: none; }
+.ico { display: inline-flex; width: 18px; height: 18px; flex: none; }
+.ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Przyciski */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.btn.danger.solid { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.block { width: 100%; }
+.icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid transparent; background: transparent; cursor: pointer; color: var(--muted); }
+.icon-btn:hover { background: var(--surface-2); color: var(--fg); border-color: var(--line); }
+.icon-btn.on { color: var(--brass); }
+.linkbtn { background: none; border: 0; padding: 6px 0; color: var(--accent); cursor: pointer; font-weight: 500; }
+.linkbtn:hover { text-decoration: underline; }
+
+/* Pola */
+label, .lbl { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+input[type=text], input[type=password], input[type=url], input[type=search], select, textarea {
+  width: 100%; min-height: 42px; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); }
+textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pw-wrap { position: relative; display: flex; }
+.pw-wrap input { padding-right: 84px; font-family: var(--f-mono); }
+.pw-wrap .tools { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; }
+.pw-wrap .icon-btn { width: 34px; height: 34px; }
+.check { display: flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 400; color: var(--fg); margin: 0; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.err { color: var(--bad); font-size: 14px; margin: 8px 0 0; }
+.hint { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
+.hint.warn { color: var(--warn); }
+
+/* Miernik siły hasła */
+.meter { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.meter .bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; width: 120px; flex: none; }
+.meter .bars i { height: 5px; border-radius: 3px; background: var(--line); }
+.meter[data-s="1"] .bars i:nth-child(-n+1), .meter[data-s="2"] .bars i:nth-child(-n+2) { background: var(--bad); }
+.meter[data-s="3"] .bars i:nth-child(-n+3) { background: var(--warn); }
+.meter[data-s="4"] .bars i:nth-child(-n+4), .meter[data-s="5"] .bars i:nth-child(-n+5) { background: var(--ok); }
+
+/* Ekran blokady */
+.lock { min-height: 100%; display: grid; place-items: center; }
+.lock-card { width: 100%; max-width: 430px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); display: grid; gap: 22px; }
+.brand { display: flex; gap: 16px; align-items: center; }
+.dial { width: 58px; height: 58px; flex: none; color: var(--accent); }
+.dial svg { width: 100%; height: 100%; }
+.brand h1 { font-size: 30px; letter-spacing: -.02em; line-height: 1.1; }
+.brand p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.lock form, .lock .stack { display: grid; gap: 14px; }
+.lock h2 { font-size: 19px; }
+.file-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px dashed var(--line-strong); font-family: var(--f-mono); font-size: 13.5px; overflow-wrap: anywhere; }
+.file-chip .ico { color: var(--brass); }
+
+/* Aplikacja */
+#main { height: 100%; display: grid; grid-template-rows: auto auto 1fr; gap: 12px; }
+.topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar .logo { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 19px; }
+.topbar .logo .dial { width: 28px; height: 28px; }
+.search { position: relative; flex: 1 1 260px; min-width: 0; max-width: 520px; }
+.search .ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.search input { padding-left: 42px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.save-state { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.save-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.save-state.pending .dot { background: var(--warn); }
+.save-state.error .dot { background: var(--bad); }
+.banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--r); background: var(--bad-soft); color: var(--fg); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
+.banner p { margin: 0; flex: 1 1 260px; }
+
+.workspace { display: grid; grid-template-columns: 210px minmax(260px, 340px) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-height: 0; overflow: auto; }
+.side { padding: 10px; background: transparent; border: 0; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 0; background: none; cursor: pointer; text-align: left; }
+.nav-item:hover { background: var(--surface); }
+.nav-item.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.nav-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 10px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.nav-head .icon-btn { width: 26px; height: 26px; }
+.nav-row { display: flex; align-items: center; }
+.nav-row .icon-btn { width: 28px; height: 28px; opacity: 0; }
+.nav-row:hover .icon-btn, .nav-row .icon-btn:focus-visible { opacity: 1; }
+.cat-form { display: flex; gap: 6px; padding: 4px 4px 0; }
+.cat-form input { min-height: 34px; padding: 5px 10px; }
+.tagcloud { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px; }
+.tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; cursor: pointer; }
+.tag.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.tag-n { font-size: 11px; opacity: .7; }
+
+.list-head { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 14px 16px 10px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.list-head h2 { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list { list-style: none; margin: 0; padding: 6px; }
+.row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 8px; border: 0; background: none; cursor: pointer; text-align: left; }
+.row:hover { background: var(--surface-2); }
+.row.on { background: var(--accent-soft); }
+.row .txt { min-width: 0; flex: 1; }
+.row .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .s { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .star { color: var(--brass); }
+.tile { --h: 160; width: 36px; height: 36px; flex: none; border-radius: 9px; display: grid; place-items: center; font-family: var(--f-display); font-weight: 600; font-size: 15px; background: hsl(var(--h) 32% var(--tile-l)); color: hsl(var(--h) 45% var(--tile-fg-l)); }
+.tile.big { width: 52px; height: 52px; border-radius: 12px; font-size: 22px; }
+.empty { padding: 32px 20px; text-align: center; color: var(--muted); display: grid; gap: 12px; justify-items: center; }
+.empty h3 { color: var(--fg); font-size: 17px; }
+.empty p { margin: 0; max-width: 34ch; }
+
+.detail { padding: 22px 24px 28px; }
+.d-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.d-head .txt { flex: 1 1 200px; min-width: 0; }
+.d-head h2 { font-size: 22px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.chip { display: inline-block; margin-top: 4px; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.d-actions { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.back { display: none; }
+.fields { margin-top: 22px; border: 1px solid var(--line); border-radius: var(--r); }
+.field { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.field:first-child { border-top: 0; }
+.f-label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.f-value { min-width: 0; overflow-wrap: anywhere; }
+.f-value a { color: var(--accent); }
+.f-tools { display: flex; }
+.f-extra { grid-column: 2 / -1; }
+.pw-mask { letter-spacing: .12em; }
+.notes { white-space: pre-wrap; }
+.warnline { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; color: var(--warn); font-size: 13px; }
+.meta { margin-top: 16px; display: flex; gap: 6px 22px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+details.history { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; }
+details.history summary { cursor: pointer; font-weight: 500; }
+.hist-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.hist-row:first-of-type { border-top: 0; margin-top: 6px; }
+.hist-row .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.confirm { margin-top: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--r); background: var(--bad-soft); }
+.confirm p { margin: 0; flex: 1 1 200px; }
+
+.form { display: grid; gap: 16px; margin-top: 20px; max-width: 620px; }
+.form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Okna dialogowe */
+dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
+dialog::backdrop { background: rgb(8 16 13 / .45); }
+.dlg { padding: 22px; display: grid; gap: 16px; }
+.dlg-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.dlg-head h2 { font-size: 19px; }
+.gen-out { display: flex; gap: 6px; align-items: center; }
+.gen-out input { font-family: var(--f-mono); font-size: 17px; letter-spacing: .02em; }
+.range-row { display: flex; align-items: center; gap: 12px; }
+.range-row input { flex: 1; accent-color: var(--accent); }
+.range-row output { width: 3ch; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.opt { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r); }
+.opt h3 { font-size: 15px; }
+.opt p { margin: 0; color: var(--muted); font-size: 14px; }
+.summary { padding: 12px 14px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }
+.summary b { font-variant-numeric: tabular-nums; }
+.sep { height: 1px; background: var(--line); }
+
+/* Komunikaty */
+#toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; padding: 10px 16px; border-radius: 10px; background: var(--fg); color: var(--bg); font-size: 14px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+
+/* Widok średni */
+@media (max-width: 1080px) { .workspace { grid-template-columns: 190px minmax(240px, 300px) minmax(0, 1fr); } .act-label { display: none; } }
+/* Telefon */
+@media (max-width: 820px) {
+  #app { padding-block: 10px; }
+  .topbar .logo span:last-child { display: none; }
+  .search { order: 3; flex-basis: 100%; max-width: none; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .side { position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 85vw); background: var(--surface); border-right: 1px solid var(--line); padding: calc(14px + env(safe-area-inset-top, 0px)) 10px calc(14px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); transform: translateX(-105%); transition: transform .2s ease; overflow: auto; border-radius: 0; }
+  body.side-open .side { transform: none; box-shadow: var(--shadow); }
+  .scrim { position: fixed; inset: 0; z-index: 25; background: rgb(8 16 13 / .4); }
+  .detail { position: fixed; inset: 0; z-index: 20; border-radius: 0; border: 0; padding: calc(14px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+  body:not(.detail-open) .detail { display: none; }
+  .back { display: inline-grid; }
+  .field { grid-template-columns: minmax(0, 1fr) auto; }
+  .field .f-label { grid-column: 1 / -1; }
+  .f-extra { grid-column: 1 / -1; }
+  .form .two { grid-template-columns: 1fr; }
+}
+@media (min-width: 821px) { .menu-btn, .scrim { display: none !important; } }
+@media (max-width: 420px) { .checks { grid-template-columns: 1fr; } .lock-card { padding: 22px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="app">
+  <!-- EKRAN BLOKADY -->
+  <section id="lock" class="lock">
+    <div class="lock-card">
+      <div class="brand">
+        <span class="dial" data-logo></span>
+        <div>
+          <h1>Sejf</h1>
+          <p>Twoje hasła w zaszyfrowanym pliku, który trzymasz u siebie.</p>
+        </div>
+      </div>
+
+      <div id="lk-home" class="stack">
+        <button id="lk-open" class="btn primary block" type="button">Otwórz plik sejfu</button>
+        <button id="lk-new" class="btn block" type="button">Utwórz nowy sejf</button>
+        <p class="hint" id="lk-tip">Trzymaj plik sejfu w folderze Dysku Google albo OneDrive. Wtedy ten sam plik otworzysz na komputerze i na telefonie.</p>
+      </div>
+
+      <form id="lk-unlock" hidden autocomplete="off">
+        <div class="file-chip"><span class="ico" data-ico="file"></span><span id="lk-fname"></span></div>
+        <div>
+          <label for="lk-pw">Hasło główne</label>
+          <div class="pw-wrap">
+            <input id="lk-pw" type="password" autocomplete="current-password" required>
+            <div class="tools"><button type="button" class="icon-btn" data-eye="lk-pw" title="Pokaż hasło" aria-label="Pokaż hasło"></button></div>
+          </div>
+          <p id="lk-err" class="err" hidden></p>
+        </div>
+        <button id="lk-go" class="btn primary block" type="submit">Odblokuj</button>
+        <button id="lk-dl" class="btn block" type="button" hidden>Pobierz plik z niezapisanymi zmianami</button>
+        <button id="lk-other" class="linkbtn" type="button">Otwórz inny plik albo utwórz nowy</button>
+      </form>
+
+      <form id="lk-create" hidden autocomplete="off">
+        <h2>Nowy sejf</h2>
+        <div>
+          <label for="lk-n1">Hasło główne</label>
+          <div class="pw-wrap">
+            <input id="lk-n1" type="password" autocomplete="new-password" required>
+            <div class="tools"><button type="button" class="icon-btn" data-eye="lk-n1" title="Pokaż hasło" aria-label="Pokaż hasło"></button></div>
+          </div>
+          <div class="meter" id="lk-meter" data-s="0"><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="m-label">Co najmniej 8 znaków. Najlepiej kilka losowych słów.</span></div>
+        </div>
+        <div>
+          <label for="lk-n2">Powtórz hasło główne</label>
+          <input id="lk-n2" type="password" autocomplete="new-password" required>
+          <p id="lk-cerr" class="err" hidden></p>
+        </div>
+        <p class="hint warn">Hasła głównego nie da się odzyskać. Jeśli je zapomnisz, stracisz dostęp do wszystkich haseł w sejfie.</p>
+        <button id="lk-create-go" class="btn primary block" type="submit">Utwórz sejf</button>
+        <button id="lk-back" class="linkbtn" type="button">Wróć</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- APLIKACJA -->
+  <section id="main" hidden>
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="btn-menu" type="button" title="Kategorie i tagi" aria-label="Kategorie i tagi" data-ico="filter"></button>
+      <div class="logo"><span class="dial" data-logo></span><span>Sejf</span></div>
+      <div class="search">
+        <span class="ico" data-ico="search"></span>
+        <input id="q" type="search" placeholder="Szukaj: nazwa, login, adres, tag…" autocomplete="off" aria-label="Szukaj">
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="btn-new" type="button" data-ico="plus" title="Nowy wpis (Ctrl+N)"><span class="act-label">Nowy wpis</span></button>
+        <button class="btn" id="btn-gen" type="button" data-ico="dice" title="Generator haseł"><span class="act-label">Generator</span></button>
+        <button class="icon-btn" id="btn-imp" type="button" data-ico="upload" title="Importuj hasła" aria-label="Importuj hasła"></button>
+        <button class="icon-btn" id="btn-exp" type="button" data-ico="download" title="Eksport i kopia zapasowa" aria-label="Eksport i kopia zapasowa"></button>
+        <button class="icon-btn" id="btn-set" type="button" data-ico="settings" title="Ustawienia" aria-label="Ustawienia"></button>
+        <button class="icon-btn" id="btn-lock" type="button" data-ico="lock" title="Zablokuj (Ctrl+L)" aria-label="Zablokuj"></button>
+      </div>
+    </header>
+
+    <div id="status-row" class="topbar">
+      <div class="save-state" id="save-state"><span class="dot"></span><span id="save-text"></span></div>
+      <button class="btn" id="btn-save" type="button" data-ico="download" hidden>Pobierz plik ze zmianami</button>
+    </div>
+
+    <div class="workspace">
+      <nav class="pane side" id="side" aria-label="Filtry"></nav>
+      <div class="pane" id="listpane"></div>
+      <div class="pane detail" id="detail"></div>
+    </div>
+  </section>
+
+  <input type="file" id="file-in" hidden>
+  <input type="file" id="csv-in" accept=".csv,text/csv,text/plain" hidden>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+<div id="toast" role="status" hidden></div>
+
+<!-- Generator -->
+<dialog id="dlg-gen">
+  <form method="dialog" class="dlg" id="gen-form">
+    <div class="dlg-head"><h2>Generator haseł</h2><button class="icon-btn" value="x" data-ico="x" aria-label="Zamknij"></button></div>
+    <div>
+      <div class="gen-out">
+        <input id="g-out" type="text" readonly aria-label="Wygenerowane hasło">
+        <button type="button" class="icon-btn" id="g-regen" data-ico="refresh" title="Wylosuj ponownie" aria-label="Wylosuj ponownie"></button>
+        <button type="button" class="icon-btn" id="g-copy" data-ico="copy" title="Kopiuj" aria-label="Kopiuj"></button>
+      </div>
+      <div class="meter" id="g-meter" data-s="0"><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="m-label"></span></div>
+    </div>
+    <div>
+      <label for="g-len">Długość</label>
+      <div class="range-row"><input type="range" id="g-len" min="8" max="64" value="20"><output id="g-lenv">20</output></div>
+    </div>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="g-lower" checked> małe litery a–z</label>
+      <label class="check"><input type="checkbox" id="g-upper" checked> wielkie litery A–Z</label>
+      <label class="check"><input type="checkbox" id="g-digits" checked> cyfry 0–9</label>
+      <label class="check"><input type="checkbox" id="g-symbols" checked> znaki specjalne !@#</label>
+      <label class="check"><input type="checkbox" id="g-noamb"> bez podobnych znaków (l, 1, O, 0)</label>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn primary" id="g-use" hidden>Użyj tego hasła</button>
+      <button class="btn" value="x">Zamknij</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Import -->
+<dialog id="dlg-imp">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2>Import haseł z pliku CSV</h2><button class="icon-btn" value="x" data-ico="x" aria-label="Zamknij"></button></div>
+    <p class="hint" style="margin:0">Obsługiwane pliki: Chrome, Edge, Opera, Firefox, Bitwarden, KeePass/KeePassXC, 1Password i inne CSV z kolumnami nazwa, adres, login, hasło. W przeglądarce eksport znajdziesz w Menedżerze haseł, w ustawieniach: „Eksportuj hasła”.</p>
+    <button type="button" class="btn" id="i-pick" data-ico="upload">Wybierz plik CSV</button>
+    <div class="summary" id="i-sum" hidden></div>
+    <div id="i-catbox" hidden>
+      <label for="i-cat">Kategoria dla wpisów bez kategorii</label>
+      <input id="i-cat" type="text" list="cat-list" value="Zaimportowane">
+    </div>
+    <p class="hint warn" id="i-warn" hidden>Po imporcie usuń plik CSV z dysku. Nie jest zaszyfrowany i każdy, kto go otworzy, zobaczy Twoje hasła.</p>
+    <div class="form-actions">
+      <button type="button" class="btn primary" id="i-go" disabled>Importuj</button>
+      <button class="btn" value="x">Anuluj</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Eksport -->
+<dialog id="dlg-exp">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2>Eksport i kopia zapasowa</h2><button class="icon-btn" value="x" data-ico="x" aria-label="Zamknij"></button></div>
+    <div class="opt">
+      <h3>Zaszyfrowana kopia zapasowa</h3>
+      <p>Kopia całego sejfu, chroniona tym samym hasłem głównym. Możesz ją trzymać np. na pendrivie.</p>
+      <div><button type="button" class="btn" id="e-backup" data-ico="download">Zapisz kopię</button></div>
+    </div>
+    <div class="opt">
+      <h3>Plik CSV bez szyfrowania</h3>
+      <p>Do przeniesienia haseł do innego programu. Każdy, kto otworzy ten plik, zobaczy wszystkie hasła.</p>
+      <label class="check"><input type="checkbox" id="e-ack"> Rozumiem i usunę plik po użyciu</label>
+      <div><button type="button" class="btn danger" id="e-csv" data-ico="download" disabled>Zapisz CSV</button></div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Ustawienia -->
+<dialog id="dlg-set">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2>Ustawienia</h2><button class="icon-btn" value="x" data-ico="x" aria-label="Zamknij"></button></div>
+    <div>
+      <label for="s-lock">Blokuj sejf po bezczynności</label>
+      <select id="s-lock">
+        <option value="1">1 minuta</option><option value="5">5 minut</option><option value="15">15 minut</option>
+        <option value="30">30 minut</option><option value="60">1 godzina</option><option value="0">Nigdy</option>
+      </select>
+    </div>
+    <div>
+      <label for="s-clip">Czyść skopiowane hasło ze schowka po</label>
+      <select id="s-clip">
+        <option value="15">15 sekundach</option><option value="30">30 sekundach</option><option value="60">1 minucie</option><option value="0">Nie czyść</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+    <h3 style="font-size:16px">Zmiana hasła głównego</h3>
+    <div><label for="s-cur">Obecne hasło główne</label><input id="s-cur" type="password" autocomplete="current-password"></div>
+    <div>
+      <label for="s-new">Nowe hasło główne</label><input id="s-new" type="password" autocomplete="new-password">
+      <div class="meter" id="s-meter" data-s="0"><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="m-label"></span></div>
+    </div>
+    <div><label for="s-new2">Powtórz nowe hasło</label><input id="s-new2" type="password" autocomplete="new-password"></div>
+    <p class="err" id="s-err" hidden></p>
+    <div class="form-actions"><button type="button" class="btn primary" id="s-change">Zmień hasło główne</button><button class="btn" value="x">Zamknij</button></div>
+  </form>
+</dialog>
+
+<datalist id="cat-list"></datalist>
+
+<script>
+'use strict';
+/* ====== Narzędzia ====== */
+const $ = (s, r = document) => r.querySelector(s);
+const te = new TextEncoder(), td = new TextDecoder();
+const ICONS = {
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.5 6.6C3.8 8.3 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  star: '<path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"/>',
+  starfill: '<path fill="currentColor" d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
+  upload: '<path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><rect x="9" y="12" width="6" height="5" rx="1"/>',
+  alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+};
+const LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="3" y="3" width="42" height="42" rx="9" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="24" cy="24" r="12.5" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="24" cy="24" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M24 11.5v3M36.5 24h-3M24 36.5v-3M11.5 24h3"/></g><path d="M24 24l5.5-5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+
+function ico(name) { const s = document.createElement('span'); s.className = 'ico'; s.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; return s; }
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return el;
+}
+function iconBtn(name, label, onclick, extra = '') { return h('button', { type: 'button', class: 'icon-btn ' + extra, title: label, 'aria-label': label, onclick }, ico(name)); }
+const b64 = {
+  enc(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); },
+  dec(str) { const s = atob(str); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+};
+const norm = s => (s || '').toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''));
+const nowIso = () => new Date().toISOString();
+function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }
+function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; if (n === 1) return one; if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few; return many; }
+const wpisy = n => `${n} ${plural(n, 'wpis', 'wpisy', 'wpisów')}`;
+function hostOf(url) { if (!url) return ''; try { return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : 'https://' + url).hostname.replace(/^www\./, ''); } catch { return ''; } }
+function safeHref(url) { if (!url) return null; const u = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : 'https://' + url; try { const p = new URL(u); return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : null; } catch { return null; } }
+function hueOf(s) { let x = 0; for (const c of s || '?') x = (x * 31 + c.codePointAt(0)) >>> 0; return x % 360; }
+function tile(title, big) { const t = h('span', { class: 'tile' + (big ? ' big' : ''), 'aria-hidden': 'true', text: ([...(title || '?').trim()][0] || '?').toUpperCase() }); t.style.setProperty('--h', hueOf(title)); return t; }
+let toastTimer;
+function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, ms); }
+async function claudeUse(name) { try { return (window.claude && typeof window.claude.use === 'function') ? await window.claude.use(name) : null; } catch { return null; } }
+
+/* ====== Kryptografia ======
+   Plik: JSON z solą i wektorem IV. Klucz z hasła głównego: PBKDF2-SHA256 (600 000 iteracji).
+   Dane: AES-256-GCM (szyfrowanie z uwierzytelnieniem, wykrywa każdą zmianę pliku). */
+const FORMAT = 'sejf-vault', ITER = 600000, AAD = te.encode('sejf-vault/1');
+async function deriveKey(pw, salt, iter) {
+  const base = await crypto.subtle.importKey('raw', te.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function seal(data, key, salt, iter) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD }, key, te.encode(JSON.stringify(data))));
+  return JSON.stringify({ format: FORMAT, version: 1, app: 'Sejf', kdf: { name: 'PBKDF2-SHA256', iterations: iter, salt: b64.enc(salt) }, cipher: { name: 'AES-256-GCM', iv: b64.enc(iv) }, data: b64.enc(ct) }, null, 1);
+}
+function envelope(text) {
+  let o; try { o = JSON.parse(text); } catch { throw new Error('To nie jest plik sejfu. Wybierz plik utworzony w tej aplikacji.'); }
+  if (!o || o.format !== FORMAT) throw new Error('To nie jest plik sejfu. Wybierz plik utworzony w tej aplikacji.');
+  if (o.version > 1) throw new Error('Ten plik pochodzi z nowszej wersji aplikacji Sejf.');
+  const iter = +o.kdf.iterations; if (!(iter >= 100000 && iter <= 10000000)) throw new Error('Plik sejfu jest uszkodzony.');
+  return { salt: b64.dec(o.kdf.salt), iter, iv: b64.dec(o.cipher.iv), data: b64.dec(o.data) };
+}
+async function decryptEnv(env, key) {
+  let pt; try { pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: env.iv, additionalData: AAD }, key, env.data); }
+  catch { throw new Error('Nieprawidłowe hasło główne.'); }
+  return normalizeVault(JSON.parse(td.decode(pt)));
+}
+async function openVault(text, pw) { const env = envelope(text); const key = await deriveKey(pw, env.salt, env.iter); return { data: await decryptEnv(env, key), key, salt: env.salt, iter: env.iter }; }
+const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+const DEFAULT_CATS = ['Bank i finanse', 'Poczta', 'Praca', 'Społeczności', 'Sklepy', 'Rozrywka', 'Inne'];
+function newVault() { const t = nowIso(); return { version: 1, created: t, modified: t, entries: [], categories: [...DEFAULT_CATS], settings: { autoLockMin: 5, clipSec: 30, gen: { length: 20, lower: true, upper: true, digits: true, symbols: true, noAmb: false } } }; }
+function normalizeVault(v) {
+  const base = newVault();
+  v = Object.assign(base, v || {});
+  v.settings = Object.assign(newVault().settings, v.settings || {});
+  v.categories = Array.isArray(v.categories) ? v.categories.filter(Boolean) : [];
+  v.entries = (Array.isArray(v.entries) ? v.entries : []).map(e => ({
+    id: e.id || uid(), title: String(e.title || ''), username: String(e.username || ''), password: String(e.password || ''),
+    url: String(e.url || ''), notes: String(e.notes || ''), category: String(e.category || ''),
+    tags: Array.isArray(e.tags) ? e.tags.map(String).filter(Boolean) : [], fav: !!e.fav,
+    created: e.created || nowIso(), updated: e.updated || e.created || nowIso(), history: Array.isArray(e.history) ? e.history.slice(0, 10) : []
+  }));
+  return v;
+}
+
+/* ====== Siła hasła i generator ====== */
+const COMMON = ['haslo', 'password', 'qwerty', '123456', '111111', 'admin', 'polska', 'zaq12wsx', '1qaz2wsx', 'abc123', 'iloveyou', 'kocham', 'zxcvbn', 'asdfgh', 'letmein', 'welcome', 'monkey', 'dragon'];
+function strength(pw) {
+  if (!pw) return { score: 0, label: '' };
+  let pool = 0;
+  if (/[a-z]/.test(pw)) pool += 26; if (/[A-Z]/.test(pw)) pool += 26; if (/\d/.test(pw)) pool += 10; if (/[^a-zA-Z0-9]/.test(pw)) pool += 33;
+  const len = [...pw].length, uniq = new Set(pw).size;
+  let bits = Math.log2(Math.max(pool, 2)) * len * Math.min(1, uniq / Math.min(len, 10));
+  const low = norm(pw);
+  if (COMMON.some(c => low.includes(c))) bits = Math.min(bits, 24);
+  if (/(0123|1234|2345|3456|4567|5678|6789|abcd|bcde|qwer|asdf|zxcv)/i.test(pw)) bits -= 12;
+  if (/^\d+$/.test(pw)) bits = Math.min(bits, 30);
+  const L = [[28, 'Bardzo słabe'], [40, 'Słabe'], [60, 'Średnie'], [80, 'Silne'], [Infinity, 'Bardzo silne']];
+  let i = 0; while (bits >= L[i][0]) i++;
+  return { score: i + 1, label: L[i][1] };
+}
+function setMeter(el, pw, emptyText = '') { const s = strength(pw); el.dataset.s = s.score; $('.m-label', el).textContent = pw ? s.label : emptyText; }
+
+const SETS = { lower: 'abcdefghijklmnopqrstuvwxyz', upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', digits: '0123456789', symbols: '!@#$%^&*()-_=+[]{};:,.?/~' };
+function randInt(n) { const lim = Math.floor(0x100000000 / n) * n; const a = new Uint32Array(1); do crypto.getRandomValues(a); while (a[0] >= lim); return a[0] % n; }
+function generate(o) {
+  const sets = Object.keys(SETS).filter(k => o[k]).map(k => o.noAmb ? SETS[k].replace(/[Il1O0o|]/g, '') : SETS[k]);
+  if (!sets.length) return '';
+  const all = sets.join(''), out = sets.map(s => s[randInt(s.length)]);
+  while (out.length < o.length) out.push(all[randInt(all.length)]);
+  for (let i = out.length - 1; i > 0; i--) { const j = randInt(i + 1); [out[i], out[j]] = [out[j], out[i]]; }
+  return out.join('');
+}
+
+/* ====== CSV ====== */
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.slice(0, text.search(/\r?\n|$/));
+  const delim = first.split(';').length > first.split(',').length ? ';' : (first.split('\t').length > first.split(',').length ? '\t' : ',');
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+const COLS = {
+  title: ['name', 'title', 'nazwa', 'tytuł', 'tytul', 'account', 'konto'],
+  url: ['url', 'login_uri', 'website', 'web site', 'adres', 'uri', 'login url', 'adres www', 'strona'],
+  username: ['username', 'login_username', 'user name', 'login', 'email', 'e-mail', 'user', 'użytkownik', 'uzytkownik', 'nazwa użytkownika'],
+  password: ['password', 'login_password', 'hasło', 'haslo'],
+  notes: ['note', 'notes', 'extra', 'notatki', 'notatka', 'comments', 'uwagi'],
+  category: ['folder', 'group', 'grouping', 'category', 'kategoria', 'grupa'],
+  fav: ['favorite', 'fav', 'ulubione'],
+  tags: ['tags', 'tagi']
+};
+function csvToEntries(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) throw new Error('Plik jest pusty albo ma tylko nagłówek.');
+  const head = rows[0].map(x => x.trim().toLowerCase());
+  const idx = {}; for (const [k, names] of Object.entries(COLS)) idx[k] = head.findIndex(x => names.includes(x));
+  if (idx.password < 0) throw new Error('Nie znaleziono kolumny z hasłami. Plik musi mieć kolumnę „password” albo „hasło”.');
+  const fmt = head.includes('login_password') ? 'Bitwarden' : head.includes('httprealm') ? 'Firefox' : (head.includes('group') && head.includes('title')) ? 'KeePass' : (head.includes('name') && head.includes('url')) ? 'Chrome / Edge / Opera' : 'CSV';
+  const get = (r, k) => idx[k] >= 0 ? (r[idx[k]] || '').trim() : '';
+  const out = [];
+  for (const r of rows.slice(1)) {
+    const e = { title: get(r, 'title'), url: get(r, 'url'), username: get(r, 'username'), password: idx.password >= 0 ? (r[idx.password] || '') : '', notes: get(r, 'notes'), category: get(r, 'category'), fav: /^(1|true|tak|yes)$/i.test(get(r, 'fav')), tags: get(r, 'tags').split(/[,;]/).map(t => t.trim()).filter(Boolean) };
+    if (!e.password && !e.username && !e.notes) continue;
+    e.category = e.category.replace(/^root\/?/i, '').split('/').filter(Boolean).pop() || '';
+    if (!e.title) e.title = hostOf(e.url) || e.username || 'Bez nazwy';
+    out.push(e);
+  }
+  return { fmt, entries: out };
+}
+const dupKey = e => [hostOf(e.url) || e.title.toLowerCase(), e.username.toLowerCase(), e.password].join('\u0001');
+function csvEscape(v) { v = String(v ?? ''); return /[",\r\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function toCSV(entries) {
+  const head = ['name', 'url', 'username', 'password', 'note', 'category', 'tags', 'favorite'];
+  return '﻿' + [head.join(','), ...entries.map(e => [e.title, e.url, e.username, e.password, e.notes, e.category, e.tags.join(', '), e.fav ? '1' : ''].map(csvEscape).join(','))].join('\r\n');
+}
+
+/* ====== Przechowywanie ====== */
+const S = {
+  data: null, key: null, salt: null, iter: ITER,
+  handle: null, fileName: '', lastMod: 0, cipher: null, dirty: false, saving: false, saveErr: '', savedAt: null, conflict: false,
+  fs: (() => { try { return 'showOpenFilePicker' in window && window.self === window.top; } catch { return false; } })(),
+  filter: { type: 'all' }, q: '', sel: null, editing: null, confirmDel: false, saveTimer: null
+};
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('sejf', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { try { const d = await this.open(); return await new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch { return undefined; } },
+  async set(k, v) { try { const d = await this.open(); await new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch { } },
+  async del(k) { try { const d = await this.open(); await new Promise(res => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); t.oncomplete = res; t.onerror = res; }); } catch { } }
+};
+const FILE_TYPES = [{ description: 'Plik sejfu', accept: { 'application/json': ['.json'] } }];
+
+async function readHandle(h) {
+  let p = await h.queryPermission({ mode: 'readwrite' });
+  if (p !== 'granted') p = await h.requestPermission({ mode: 'readwrite' });
+  if (p !== 'granted') throw new Error('Bez zgody na dostęp do pliku nie da się otworzyć sejfu.');
+  const f = await h.getFile(); S.lastMod = f.lastModified; return f.text();
+}
+
+/** Zapisuje plik z danymi pod wskazaną nazwą (okno zapisu, przycisk pobierania albo arkusz udostępniania na telefonie). */
+async function saveFile(name, text) {
+  if (S.fs) {
+    try { const fh = await showSaveFilePicker({ suggestedName: name }); const w = await fh.createWritable(); await w.write(text); await w.close(); return true; }
+    catch (e) { if (e.name === 'AbortError') return false; toast('Nie udało się zapisać pliku: ' + e.message, 5000); return false; }
+  }
+  const dl = await claudeUse('downloads');
+  if (dl) {
+    try { await dl.save({ filename: name, data: text }); return true; }
+    catch (e) { if (e && e.code !== 'declined') toast('Nie udało się zapisać pliku (' + (e.code || 'błąd') + ').', 5000); return false; }
+  }
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' })), download: name });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); return true;
+}
+
+async function persist(force = false) {
+  clearTimeout(S.saveTimer); S.saveTimer = null;
+  if (!S.data) return;
+  S.saving = true; renderSave();
+  const text = await seal(S.data, S.key, S.salt, S.iter);
+  S.cipher = text;
+  if (!S.handle) { S.dirty = true; S.saving = false; renderSave(); return; }
+  try {
+    const f = await S.handle.getFile();
+    if (!force && S.lastMod && f.lastModified !== S.lastMod) { S.conflict = true; S.dirty = true; S.saving = false; renderSave(); return; }
+    const w = await S.handle.createWritable(); await w.write(text); await w.close();
+    S.lastMod = (await S.handle.getFile()).lastModified;
+    S.dirty = false; S.conflict = false; S.saveErr = ''; S.savedAt = new Date();
+  } catch (e) { S.dirty = true; S.saveErr = 'Nie udało się zapisać pliku: ' + e.message; }
+  S.saving = false; renderSave();
+}
+function changed() { S.data.modified = nowIso(); S.dirty = true; clearTimeout(S.saveTimer); S.saveTimer = setTimeout(() => persist(), 350); renderSave(); }
+async function flush() { if (S.saveTimer) await persist(); }
+
+/** Gdy plik zmienił się na innym urządzeniu (np. telefon zapisał do Dysku), wczytaj zmiany. */
+async function checkExternal() {
+  if (!S.data || !S.handle || S.saving || S.saveTimer) return;
+  try {
+    const f = await S.handle.getFile();
+    if (!S.lastMod || f.lastModified === S.lastMod) return;
+    if (S.dirty) { S.conflict = true; renderSave(); return; }
+    const env = envelope(await f.text());
+    if (env.iter !== S.iter || !sameBytes(env.salt, S.salt)) { await lock(); toast('Hasło główne zmieniono na innym urządzeniu. Odblokuj sejf nowym hasłem.', 6000); return; }
+    S.data = await decryptEnv(env, S.key); S.lastMod = f.lastModified; S.cipher = null;
+    if (S.sel && !S.data.entries.some(e => e.id === S.sel)) S.sel = null;
+    if (!S.editing) render(); toast('Wczytano zmiany z innego urządzenia.');
+  } catch { }
+}
+
+/* ====== Ekran blokady ====== */
+function showLock(view) {
+  $('#main').hidden = true; $('#lock').hidden = false;
+  document.body.classList.remove('detail-open', 'side-open'); $('#scrim').hidden = true;
+  for (const id of ['lk-home', 'lk-unlock', 'lk-create']) $('#' + id).hidden = id !== view;
+  $('#lk-err').hidden = true; $('#lk-cerr').hidden = true;
+  if (view === 'lk-unlock') {
+    $('#lk-fname').textContent = S.fileName || 'hasla.sejf.json';
+    $('#lk-dl').hidden = !(S.dirty && S.cipher && !S.handle);
+    setTimeout(() => $('#lk-pw').focus(), 30);
+  }
+  if (view === 'lk-create') setTimeout(() => $('#lk-n1').focus(), 30);
+}
+function busy(btn, on, text) { if (on) { btn.dataset.t = btn.textContent; btn.textContent = text; btn.disabled = true; } else { btn.textContent = btn.dataset.t || btn.textContent; btn.disabled = false; } }
+
+$('#lk-open').onclick = async () => {
+  if (S.fs) {
+    try { const [fh] = await showOpenFilePicker({ types: FILE_TYPES, excludeAcceptAllOption: false }); S.handle = fh; S.fileName = fh.name; S.cipher = null; S.dirty = false; await idb.set('last', fh); showLock('lk-unlock'); }
+    catch (e) { if (e.name !== 'AbortError') toast(e.message, 5000); }
+  } else $('#file-in').click();
+};
+$('#file-in').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const text = await f.text();
+  try { envelope(text); } catch (err) { toast(err.message, 5000); return; }
+  S.handle = null; S.cipher = text; S.fileName = f.name; S.dirty = false; showLock('lk-unlock');
+};
+$('#lk-new').onclick = () => { $('#lk-n1').value = ''; $('#lk-n2').value = ''; setMeter($('#lk-meter'), '', 'Co najmniej 8 znaków. Najlepiej kilka losowych słów.'); showLock('lk-create'); };
+$('#lk-back').onclick = () => showLock(S.handle || S.cipher ? 'lk-unlock' : 'lk-home');
+$('#lk-other').onclick = async () => { await idb.del('last'); S.handle = null; S.cipher = null; S.fileName = ''; S.dirty = false; showLock('lk-home'); };
+$('#lk-dl').onclick = async () => { if (await saveFile(S.fileName || 'hasla.sejf.json', S.cipher)) { S.dirty = false; $('#lk-dl').hidden = true; toast('Zapisano plik.'); } };
+$('#lk-n1').oninput = e => setMeter($('#lk-meter'), e.target.value, 'Co najmniej 8 znaków. Najlepiej kilka losowych słów.');
+
+$('#lk-unlock').onsubmit = async e => {
+  e.preventDefault();
+  const btn = $('#lk-go'), err = $('#lk-err'), pw = $('#lk-pw').value;
+  err.hidden = true; busy(btn, true, 'Odblokowuję…');
+  try {
+    const text = S.handle ? await readHandle(S.handle) : S.cipher;
+    if (!text) throw new Error('Najpierw wybierz plik sejfu.');
+    const v = await openVault(text, pw);
+    Object.assign(S, { data: v.data, key: v.key, salt: v.salt, iter: v.iter, cipher: text, saveErr: '', conflict: false });
+    $('#lk-pw').value = ''; enterMain();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; $('#lk-pw').select(); }
+  finally { busy(btn, false); }
+};
+
+$('#lk-create').onsubmit = async e => {
+  e.preventDefault();
+  const p1 = $('#lk-n1').value, p2 = $('#lk-n2').value, err = $('#lk-cerr'), btn = $('#lk-create-go');
+  err.hidden = true;
+  if ([...p1].length < 8) { err.textContent = 'Hasło główne musi mieć co najmniej 8 znaków.'; err.hidden = false; return; }
+  if (p1 !== p2) { err.textContent = 'Hasła się różnią. Wpisz to samo hasło w obu polach.'; err.hidden = false; return; }
+  let fh = null;
+  if (S.fs) {
+    try { fh = await showSaveFilePicker({ suggestedName: 'hasla.sejf.json', types: FILE_TYPES }); }
+    catch (ex) { if (ex.name !== 'AbortError') { err.textContent = ex.message; err.hidden = false; } return; }
+  }
+  busy(btn, true, 'Tworzę sejf…');
+  try {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    Object.assign(S, { data: newVault(), salt, iter: ITER, key: await deriveKey(p1, salt, ITER), handle: fh, fileName: fh ? fh.name : 'hasla.sejf.json', lastMod: 0, dirty: true, conflict: false, saveErr: '' });
+    if (fh) await idb.set('last', fh);
+    await persist(true);
+    $('#lk-n1').value = ''; $('#lk-n2').value = '';
+    enterMain();
+    toast(fh ? 'Utworzono sejf.' : 'Utworzono sejf. Zapisz plik przyciskiem „Pobierz plik ze zmianami”.', 5000);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+  finally { busy(btn, false); }
+};
+
+async function lock(auto) {
+  await flush().catch(() => { });
+  for (const d of document.querySelectorAll('dialog[open]')) d.close();
+  Object.assign(S, { data: null, key: null, sel: null, editing: null, confirmDel: false, q: '' });
+  $('#q').value = ''; $('#detail').replaceChildren(); $('#listpane').replaceChildren(); $('#side').replaceChildren();
+  showLock(S.handle || S.cipher ? 'lk-unlock' : 'lk-home');
+  if (auto) toast('Sejf został zablokowany po okresie bezczynności.', 4000);
+}
+
+/* ====== Widok główny ====== */
+function enterMain() { $('#lock').hidden = true; $('#main').hidden = false; S.filter = { type: 'all' }; S.sel = null; S.editing = null; lastAct = Date.now(); render(); renderSave(); }
+
+function categories() {
+  const set = new Set(S.data.categories);
+  for (const e of S.data.entries) if (e.category) set.add(e.category);
+  return [...set].sort((a, b) => a.localeCompare(b, 'pl'));
+}
+function tagCounts() { const m = new Map(); for (const e of S.data.entries) for (const t of e.tags) m.set(t, (m.get(t) || 0) + 1); return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pl')); }
+const sameFilter = f => S.filter.type === f.type && S.filter.value === f.value;
+function filterTitle() { const f = S.filter; return f.type === 'all' ? 'Wszystkie' : f.type === 'fav' ? 'Ulubione' : f.type === 'tag' ? '#' + f.value : f.type === 'none' ? 'Bez kategorii' : f.value; }
+function visible() {
+  const words = norm(S.q.trim()).split(/\s+/).filter(Boolean);
+  return S.data.entries.filter(e => {
+    const f = S.filter;
+    if (f.type === 'fav' && !e.fav) return false;
+    if (f.type === 'cat' && e.category !== f.value) return false;
+    if (f.type === 'none' && e.category) return false;
+    if (f.type === 'tag' && !e.tags.includes(f.value)) return false;
+    if (words.length) { const hay = norm([e.title, e.username, e.url, e.notes, e.category, e.tags.join(' ')].join(' ')); return words.every(w => hay.includes(w)); }
+    return true;
+  }).sort((a, b) => a.title.localeCompare(b.title, 'pl', { sensitivity: 'base' }));
+}
+function setFilter(f) { S.filter = f; S.sel = null; S.editing = null; closeSide(); render(); }
+
+function render() { renderSide(); renderList(); renderDetail(); $('#cat-list').replaceChildren(...categories().map(c => h('option', { value: c }))); }
+
+function renderSide() {
+  const E = S.data.entries, nav = $('#side');
+  const item = (label, f, count, icon) => h('button', { type: 'button', class: 'nav-item' + (sameFilter(f) ? ' on' : ''), onclick: () => setFilter(f) }, icon ? ico(icon) : null, h('span', { class: 'nav-label', text: label }), h('span', { class: 'count', text: count }));
+  const kids = [item('Wszystkie', { type: 'all' }, E.length, 'grid'), item('Ulubione', { type: 'fav' }, E.filter(e => e.fav).length, 'star')];
+  const addBtn = iconBtn('plus', 'Dodaj kategorię', () => { form.hidden = !form.hidden; if (!form.hidden) inp.focus(); });
+  kids.push(h('div', { class: 'nav-head' }, h('span', { text: 'Kategorie' }), addBtn));
+  const inp = h('input', { type: 'text', id: 'new-cat', placeholder: 'Nazwa kategorii', 'aria-label': 'Nazwa nowej kategorii' });
+  const form = h('form', { class: 'cat-form', hidden: true, onsubmit: ev => { ev.preventDefault(); const v = inp.value.trim(); if (v && !categories().includes(v)) { S.data.categories.push(v); changed(); } inp.value = ''; renderSide(); } }, inp, h('button', { class: 'btn', type: 'submit', text: 'Dodaj' }));
+  kids.push(form);
+  for (const c of categories()) {
+    const n = E.filter(e => e.category === c).length;
+    kids.push(h('div', { class: 'nav-row' }, item(c, { type: 'cat', value: c }, n, 'folder'), n ? null : iconBtn('x', `Usuń kategorię ${c}`, () => { S.data.categories = S.data.categories.filter(x => x !== c); if (sameFilter({ type: 'cat', value: c })) S.filter = { type: 'all' }; changed(); render(); })));
+  }
+  const none = E.filter(e => !e.category).length;
+  if (none) kids.push(item('Bez kategorii', { type: 'none' }, none, 'folder'));
+  const tags = tagCounts();
+  if (tags.length) {
+    kids.push(h('div', { class: 'nav-head' }, h('span', { text: 'Tagi' })));
+    kids.push(h('div', { class: 'tagcloud' }, tags.map(([t, n]) => h('button', { type: 'button', class: 'tag' + (sameFilter({ type: 'tag', value: t }) ? ' on' : ''), onclick: () => setFilter(sameFilter({ type: 'tag', value: t }) ? { type: 'all' } : { type: 'tag', value: t }) }, '#' + t, h('span', { class: 'tag-n', text: n })))));
+  }
+  nav.replaceChildren(...kids);
+}
+
+function renderList() {
+  const list = visible(), pane = $('#listpane');
+  const head = h('div', { class: 'list-head' }, h('h2', { text: filterTitle() }), h('span', { class: 'count', text: wpisy(list.length) }));
+  let body;
+  if (!S.data.entries.length) {
+    body = h('div', { class: 'empty' }, h('h3', { text: 'Sejf jest pusty' }), h('p', { text: 'Dodaj pierwsze hasło albo przenieś hasła zapisane w przeglądarce.' }),
+      h('button', { type: 'button', class: 'btn primary', onclick: newEntry }, ico('plus'), 'Dodaj wpis'),
+      h('button', { type: 'button', class: 'btn', onclick: openImport }, ico('upload'), 'Importuj z przeglądarki'));
+  } else if (!list.length) {
+    body = h('div', { class: 'empty' }, h('p', { text: S.q ? `Nic nie pasuje do „${S.q}”.` : 'Brak wpisów w tym widoku.' }));
+  } else {
+    body = h('ul', { class: 'list' }, list.map(e => h('li', null, h('button', { type: 'button', class: 'row' + (e.id === S.sel ? ' on' : ''), 'data-id': e.id, onclick: () => { S.sel = e.id; S.editing = null; S.confirmDel = false; renderList(); renderDetail(); } },
+      tile(e.title), h('span', { class: 'txt' }, h('div', { class: 't', text: e.title }), h('div', { class: 's', text: e.username || hostOf(e.url) || e.category || '—' })), e.fav ? h('span', { class: 'star', title: 'Ulubione' }, ico('starfill')) : null))));
+  }
+  pane.replaceChildren(head, body);
+}
+
+function mask(pw) { return pw ? '•'.repeat(Math.min([...pw].length, 14)) : '—'; }
+
+function renderDetail() {
+  const pane = $('#detail');
+  document.body.classList.toggle('detail-open', !!(S.sel || S.editing));
+  if (S.editing) { pane.replaceChildren(editForm(S.editing)); return; }
+  const e = S.data.entries.find(x => x.id === S.sel);
+  if (!e) {
+    pane.replaceChildren(h('div', { class: 'empty', style: 'height:100%;align-content:center' }, h('span', { class: 'dial', style: 'opacity:.35' }), h('h3', { text: S.data.entries.length ? 'Wybierz wpis z listy' : 'Tu zobaczysz szczegóły wpisu' }), h('p', { text: `W sejfie: ${wpisy(S.data.entries.length)}. Ctrl+N dodaje nowy wpis, Ctrl+F przenosi do wyszukiwarki.` })));
+    $('.dial', pane).innerHTML = LOGO; return;
+  }
+  pane.replaceChildren(viewEntry(e));
+}
+
+function closeDetail() { S.sel = null; S.editing = null; S.confirmDel = false; renderList(); renderDetail(); }
+
+function viewEntry(e) {
+  const st = strength(e.password);
+  const reused = e.password ? S.data.entries.filter(x => x !== e && x.password === e.password) : [];
+  const href = safeHref(e.url);
+  let shown = false;
+  const pwEl = h('span', { class: 'mono pw-mask', text: mask(e.password) });
+  const eye = iconBtn('eye', 'Pokaż hasło', () => { shown = !shown; pwEl.textContent = shown ? e.password : mask(e.password); pwEl.classList.toggle('pw-mask', !shown); eye.replaceChildren(ico(shown ? 'eyeoff' : 'eye')); eye.title = shown ? 'Ukryj hasło' : 'Pokaż hasło'; });
+  const field = (label, value, tools, extra) => h('div', { class: 'field' }, h('div', { class: 'f-label', text: label }), h('div', { class: 'f-value' }, value), h('div', { class: 'f-tools' }, tools), extra ? h('div', { class: 'f-extra' }, extra) : null);
+  const meter = h('div', { class: 'meter', 'data-s': st.score }, h('span', { class: 'bars' }, h('i'), h('i'), h('i'), h('i'), h('i')), h('span', { class: 'm-label', text: st.label }));
+
+  const fields = [
+    field('Login', e.username ? h('span', { class: 'mono', text: e.username }) : '—', e.username ? iconBtn('copy', 'Kopiuj login', () => copy(e.username, 'login')) : null),
+    field('Hasło', pwEl, e.password ? [eye, iconBtn('copy', 'Kopiuj hasło', () => copy(e.password, 'hasło', true))] : null,
+      e.password ? [meter, reused.length ? h('div', { class: 'warnline' }, ico('alert'), h('span', { text: `To samo hasło jest też w: ${reused.map(x => x.title).join(', ')}. Lepiej mieć osobne hasło do każdego konta.` })) : null] : null),
+    field('Adres', href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer', text: e.url }) : (e.url || '—'), href ? [iconBtn('link', 'Otwórz stronę', () => window.open(href, '_blank', 'noopener')), iconBtn('copy', 'Kopiuj adres', () => copy(e.url, 'adres'))] : null),
+    e.tags.length ? field('Tagi', h('div', { class: 'tagcloud', style: 'padding:0' }, e.tags.map(t => h('button', { type: 'button', class: 'tag', onclick: () => setFilter({ type: 'tag', value: t }) }, '#' + t))), null) : null,
+    e.notes ? field('Notatki', h('div', { class: 'notes', text: e.notes }), iconBtn('copy', 'Kopiuj notatki', () => copy(e.notes, 'notatki'))) : null
+  ];
+  const favBtn = iconBtn(e.fav ? 'starfill' : 'star', e.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', () => { e.fav = !e.fav; changed(); renderSide(); renderList(); renderDetail(); }, e.fav ? 'on' : '');
+  const confirm = S.confirmDel ? h('div', { class: 'confirm' }, h('p', { text: `Usunąć wpis „${e.title}”? Tej operacji nie da się cofnąć.` }),
+    h('button', { type: 'button', class: 'btn danger solid', onclick: () => { S.data.entries = S.data.entries.filter(x => x.id !== e.id); S.sel = null; S.confirmDel = false; changed(); render(); toast('Usunięto wpis.'); } }, 'Usuń'),
+    h('button', { type: 'button', class: 'btn', onclick: () => { S.confirmDel = false; renderDetail(); } }, 'Anuluj')) : null;
+  const hist = e.history.length ? h('details', { class: 'history' }, h('summary', { text: `Poprzednie hasła (${e.history.length})` }),
+    e.history.map(x => h('div', { class: 'hist-row' }, h('span', { class: 'mono', text: x.password }), h('span', { class: 'count', text: fmtDate(x.changed) }), iconBtn('copy', 'Kopiuj', () => copy(x.password, 'hasło', true))))) : null;
+
+  return h('div', null,
+    h('div', { class: 'd-head' },
+      iconBtn('back', 'Wróć do listy', closeDetail, 'back'),
+      tile(e.title, true),
+      h('div', { class: 'txt' }, h('h2', { text: e.title }), h('span', { class: 'chip', text: e.category || 'Bez kategorii' })),
+      h('div', { class: 'd-actions' }, favBtn, iconBtn('edit', 'Edytuj', () => { S.editing = { id: e.id, draft: { ...e, tags: [...e.tags] } }; renderDetail(); }), iconBtn('trash', 'Usuń wpis', () => { S.confirmDel = true; renderDetail(); }))),
+    confirm,
+    h('div', { class: 'fields' }, fields),
+    hist,
+    h('div', { class: 'meta' }, h('span', { text: 'Utworzono: ' + fmtDate(e.created) }), h('span', { text: 'Zmieniono: ' + fmtDate(e.updated) })));
+}
+
+function newEntry() {
+  const cat = S.filter.type === 'cat' ? S.filter.value : '';
+  const tags = S.filter.type === 'tag' ? [S.filter.value] : [];
+  S.editing = { id: null, draft: { title: '', username: '', password: '', url: '', notes: '', category: cat, tags, fav: S.filter.type === 'fav' } };
+  S.sel = null; closeSide(); renderList(); renderDetail();
+  setTimeout(() => $('#f-title')?.focus(), 30);
+}
+
+function editForm(ed) {
+  const d = ed.draft;
+  const inp = (id, label, value, attrs = {}) => h('div', null, h('label', { for: id, text: label }), h('input', { id, type: 'text', value, autocomplete: 'off', ...attrs }));
+  const pw = h('input', { id: 'f-pass', type: 'password', value: d.password, autocomplete: 'new-password', spellcheck: 'false' });
+  const meter = h('div', { class: 'meter', 'data-s': '0' }, h('span', { class: 'bars' }, h('i'), h('i'), h('i'), h('i'), h('i')), h('span', { class: 'm-label' }));
+  const upd = () => setMeter(meter, pw.value, 'Wpisz hasło albo wygeneruj losowe.');
+  pw.addEventListener('input', upd);
+  const eye = iconBtn('eye', 'Pokaż hasło', () => { const s = pw.type === 'password'; pw.type = s ? 'text' : 'password'; eye.replaceChildren(ico(s ? 'eyeoff' : 'eye')); });
+  const genBtn = iconBtn('dice', 'Wygeneruj hasło', () => openGen(v => { pw.value = v; pw.type = 'text'; eye.replaceChildren(ico('eyeoff')); upd(); }));
+  const cancel = () => { const wasNew = !ed.id; S.editing = null; if (wasNew) S.sel = null; renderDetail(); renderList(); };
+  const form = h('form', { class: 'form', autocomplete: 'off', onsubmit: ev => {
+    ev.preventDefault();
+    const v = id => $('#' + id).value;
+    const url = v('f-url').trim();
+    const rec = { title: v('f-title').trim() || hostOf(url) || v('f-user').trim() || 'Bez nazwy', username: v('f-user').trim(), password: pw.value, url, category: v('f-cat').trim(), tags: [...new Set(v('f-tags').split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))], notes: v('f-notes'), fav: $('#f-fav').checked };
+    const t = nowIso();
+    if (ed.id) {
+      const e = S.data.entries.find(x => x.id === ed.id);
+      if (e.password && e.password !== rec.password) e.history = [{ password: e.password, changed: t }, ...e.history].slice(0, 10);
+      Object.assign(e, rec, { updated: t });
+    } else { const e = { id: uid(), ...rec, created: t, updated: t, history: [] }; S.data.entries.push(e); ed.id = e.id; }
+    if (rec.category && !S.data.categories.includes(rec.category)) S.data.categories.push(rec.category);
+    S.sel = ed.id; S.editing = null; changed(); render(); toast('Zapisano wpis.');
+  } },
+    inp('f-title', 'Nazwa', d.title, { required: false, placeholder: 'np. Bank, Gmail, Allegro' }),
+    h('div', { class: 'two' }, inp('f-user', 'Login lub e-mail', d.username, { spellcheck: 'false' }), inp('f-url', 'Adres strony', d.url, { placeholder: 'np. allegro.pl', spellcheck: 'false' })),
+    h('div', null, h('label', { for: 'f-pass', text: 'Hasło' }), h('div', { class: 'pw-wrap' }, pw, h('div', { class: 'tools' }, eye, genBtn)), meter),
+    h('div', { class: 'two' }, inp('f-cat', 'Kategoria', d.category, { list: 'cat-list', placeholder: 'np. Poczta' }), inp('f-tags', 'Tagi (oddziel przecinkami)', d.tags.join(', '), { placeholder: 'np. rodzina, 2FA' })),
+    h('div', null, h('label', { for: 'f-notes', text: 'Notatki' }), h('textarea', { id: 'f-notes', spellcheck: 'false' }, d.notes)),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'f-fav', checked: d.fav }), 'Dodaj do ulubionych'),
+    h('div', { class: 'form-actions' }, h('button', { type: 'submit', class: 'btn primary', text: 'Zapisz' }), h('button', { type: 'button', class: 'btn', text: 'Anuluj', onclick: cancel })));
+  upd();
+  return h('div', null, h('div', { class: 'd-head' }, iconBtn('back', 'Wróć', cancel, 'back'), h('h2', { text: ed.id ? 'Edycja wpisu' : 'Nowy wpis' })), form);
+}
+
+/* ====== Status zapisu ====== */
+function renderSave() {
+  if (!S.data) return;
+  const box = $('#save-state'), txt = $('#save-text'), btn = $('#btn-save');
+  box.className = 'save-state';
+  btn.hidden = true;
+  let banner = $('#conflict');
+  if (S.conflict) {
+    if (!banner) {
+      banner = h('div', { class: 'banner', id: 'conflict' }, ico('alert'), h('p', { text: 'Plik sejfu zmienił się na innym urządzeniu, a tutaj masz niezapisane zmiany. Wybierz, którą wersję zachować.' }),
+        h('button', { type: 'button', class: 'btn', onclick: async () => { S.dirty = false; S.conflict = false; S.lastMod = -1; await lock(); toast('Odblokuj sejf, żeby wczytać wersję z pliku.', 4000); } }, 'Wczytaj wersję z pliku'),
+        h('button', { type: 'button', class: 'btn primary', onclick: () => persist(true) }, 'Zachowaj moją wersję'));
+      $('#status-row').after(banner);
+    }
+  } else if (banner) banner.remove();
+  if (S.handle) {
+    if (S.saveErr) { box.classList.add('error'); txt.textContent = S.saveErr; }
+    else if (S.saving || S.saveTimer) { box.classList.add('pending'); txt.textContent = 'Zapisywanie…'; }
+    else if (S.conflict) { box.classList.add('error'); txt.textContent = 'Konflikt wersji'; }
+    else txt.textContent = `${S.fileName} · zapisano automatycznie${S.savedAt ? ' o ' + S.savedAt.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : ''}`;
+  } else {
+    if (S.dirty) { box.classList.add('pending'); txt.textContent = `${S.fileName} · niezapisane zmiany`; btn.hidden = false; }
+    else txt.textContent = `${S.fileName} · bez zmian`;
+  }
+}
+$('#btn-save').onclick = async () => { await flush(); if (await saveFile(S.fileName || 'hasla.sejf.json', S.cipher)) { S.dirty = false; renderSave(); toast('Zapisano plik. Wgraj go do Dysku Google w miejsce starego.', 5000); } };
+
+/* ====== Schowek ====== */
+let clipTimer = null, clipDue = 0;
+async function copy(text, what, secret) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch {
+    const ta = h('textarea', { style: 'position:fixed;opacity:0;left:-9999px' }); ta.value = text; document.body.append(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch { } ta.remove();
+  }
+  if (!ok) { toast('Nie udało się skopiować. Zaznacz tekst i użyj Ctrl+C.', 4000); return; }
+  const sec = +S.data?.settings.clipSec || 0;
+  if (secret && sec) { clearTimeout(clipTimer); clipDue = Date.now() + sec * 1000; clipTimer = setTimeout(clearClip, sec * 1000); toast(`Skopiowano ${what}. Schowek wyczyszczę za ${sec} s.`); }
+  else toast(`Skopiowano ${what}.`);
+}
+async function clearClip() { try { await navigator.clipboard.writeText(''); clipDue = 0; toast('Wyczyszczono schowek.'); } catch { /* okno nie ma fokusu – ponowię, gdy wrócisz */ } }
+window.addEventListener('focus', () => { if (clipDue && Date.now() >= clipDue) clearClip(); checkExternal(); });
+
+/* ====== Autoblokada ====== */
+let lastAct = Date.now();
+for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true });
+setInterval(() => { if (!S.data) return; const m = +S.data.settings.autoLockMin; if (m && Date.now() - lastAct > m * 60000) lock(true); }, 4000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkExternal(); });
+
+/* ====== Generator ====== */
+let genCb = null;
+function genOpts() { return { length: +$('#g-len').value, lower: $('#g-lower').checked, upper: $('#g-upper').checked, digits: $('#g-digits').checked, symbols: $('#g-symbols').checked, noAmb: $('#g-noamb').checked }; }
+function regen() { const o = genOpts(); $('#g-lenv').textContent = o.length; const v = generate(o); $('#g-out').value = v || 'Zaznacz co najmniej jeden rodzaj znaków'; setMeter($('#g-meter'), v); if (S.data) S.data.settings.gen = o; }
+function openGen(cb) {
+  genCb = cb || null; const g = S.data?.settings.gen;
+  if (g) { $('#g-len').value = g.length; $('#g-lower').checked = g.lower; $('#g-upper').checked = g.upper; $('#g-digits').checked = g.digits; $('#g-symbols').checked = g.symbols; $('#g-noamb').checked = g.noAmb; }
+  $('#g-use').hidden = !genCb; regen(); $('#dlg-gen').showModal();
+}
+for (const id of ['g-len', 'g-lower', 'g-upper', 'g-digits', 'g-symbols', 'g-noamb']) $('#' + id).addEventListener('input', regen);
+$('#g-regen').onclick = regen;
+$('#g-copy').onclick = () => { const v = $('#g-out').value; if (genOpts() && v && !v.startsWith('Zaznacz')) copy(v, 'hasło', true); };
+$('#g-use').onclick = () => { const v = $('#g-out').value; if (genCb && v && !v.startsWith('Zaznacz')) genCb(v); $('#dlg-gen').close(); };
+$('#dlg-gen').addEventListener('close', () => { genCb = null; });
+
+/* ====== Import ====== */
+let pending = null;
+function openImport() { pending = null; $('#i-sum').hidden = true; $('#i-catbox').hidden = true; $('#i-warn').hidden = true; $('#i-go').disabled = true; $('#dlg-imp').showModal(); }
+$('#i-pick').onclick = () => $('#csv-in').click();
+$('#csv-in').onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  const sum = $('#i-sum'); sum.hidden = false;
+  try {
+    const r = csvToEntries(await f.text());
+    const have = new Set(S.data.entries.map(dupKey)); const seen = new Set();
+    const fresh = r.entries.filter(e => { const k = dupKey(e); if (have.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+    pending = fresh;
+    const dups = r.entries.length - fresh.length;
+    sum.replaceChildren(h('div', null, 'Plik: ', h('b', { text: f.name }), ` (format: ${r.fmt})`), h('div', null, 'Znaleziono: ', h('b', { text: wpisy(r.entries.length) })),
+      dups ? h('div', null, 'Pominę powtórzenia: ', h('b', { text: String(dups) })) : null, h('div', null, 'Do dodania: ', h('b', { text: wpisy(fresh.length) })));
+    $('#i-catbox').hidden = !fresh.some(e => !e.category); $('#i-warn').hidden = false; $('#i-go').disabled = !fresh.length;
+  } catch (e) { pending = null; sum.textContent = e.message; $('#i-go').disabled = true; }
+};
+$('#i-go').onclick = () => {
+  if (!pending?.length) return;
+  const cat = $('#i-cat').value.trim(), t = nowIso();
+  for (const e of pending) { const c = e.category || cat; S.data.entries.push({ id: uid(), ...e, category: c, created: t, updated: t, history: [] }); if (c && !S.data.categories.includes(c)) S.data.categories.push(c); }
+  const n = pending.length; pending = null; $('#dlg-imp').close(); S.filter = { type: 'all' }; changed(); render(); toast(`Zaimportowano ${wpisy(n)}. Usuń teraz plik CSV z dysku.`, 6000);
+};
+
+/* ====== Eksport ====== */
+$('#e-ack').onchange = e => { $('#e-csv').disabled = !e.target.checked; };
+$('#e-backup').onclick = async () => { await flush(); const text = S.cipher || await seal(S.data, S.key, S.salt, S.iter); if (await saveFile(`hasla-kopia-${new Date().toISOString().slice(0, 10)}.json`, text)) toast('Zapisano zaszyfrowaną kopię.'); };
+$('#e-csv').onclick = async () => { if (await saveFile(`hasla-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(S.data.entries))) { toast('Zapisano CSV. Usuń go po użyciu.', 5000); $('#e-ack').checked = false; $('#e-csv').disabled = true; } };
+
+/* ====== Ustawienia ====== */
+function openSettings() { $('#s-lock').value = String(S.data.settings.autoLockMin); $('#s-clip').value = String(S.data.settings.clipSec); for (const id of ['s-cur', 's-new', 's-new2']) $('#' + id).value = ''; $('#s-err').hidden = true; setMeter($('#s-meter'), ''); $('#dlg-set').showModal(); }
+$('#s-lock').onchange = e => { S.data.settings.autoLockMin = +e.target.value; changed(); };
+$('#s-clip').onchange = e => { S.data.settings.clipSec = +e.target.value; changed(); };
+$('#s-new').oninput = e => setMeter($('#s-meter'), e.target.value);
+$('#s-change').onclick = async () => {
+  const err = $('#s-err'), btn = $('#s-change'), cur = $('#s-cur').value, n1 = $('#s-new').value, n2 = $('#s-new2').value;
+  err.hidden = true;
+  if ([...n1].length < 8) { err.textContent = 'Nowe hasło główne musi mieć co najmniej 8 znaków.'; err.hidden = false; return; }
+  if (n1 !== n2) { err.textContent = 'Nowe hasła się różnią.'; err.hidden = false; return; }
+  busy(btn, true, 'Zmieniam…');
+  try {
+    await flush();
+    const check = await deriveKey(cur, S.salt, S.iter);
+    await decryptEnv(envelope(S.cipher || await seal(S.data, S.key, S.salt, S.iter)), check).catch(() => { throw new Error('Obecne hasło główne jest nieprawidłowe.'); });
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    S.salt = salt; S.iter = ITER; S.key = await deriveKey(n1, salt, ITER);
+    await persist(); $('#dlg-set').close();
+    toast(S.handle ? 'Zmieniono hasło główne.' : 'Zmieniono hasło główne. Pobierz plik ze zmianami.', 5000);
+  } catch (e) { err.textContent = e.message; err.hidden = false; }
+  finally { busy(btn, false); }
+};
+
+/* ====== Panel boczny na telefonie ====== */
+function openSide() { document.body.classList.add('side-open'); $('#scrim').hidden = false; }
+function closeSide() { document.body.classList.remove('side-open'); $('#scrim').hidden = true; }
+$('#btn-menu').onclick = openSide; $('#scrim').onclick = closeSide;
+
+/* ====== Przyciski i skróty ====== */
+$('#btn-new').onclick = newEntry;
+$('#btn-gen').onclick = () => openGen();
+$('#btn-imp').onclick = openImport;
+$('#btn-exp').onclick = () => { $('#e-ack').checked = false; $('#e-csv').disabled = true; $('#dlg-exp').showModal(); };
+$('#btn-set').onclick = openSettings;
+$('#btn-lock').onclick = () => lock();
+$('#q').addEventListener('input', e => { S.q = e.target.value; renderList(); });
+document.addEventListener('keydown', e => {
+  if (!S.data) return;
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (mod && k === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); }
+  else if (mod && k === 'n') { e.preventDefault(); newEntry(); }
+  else if (mod && k === 'l') { e.preventDefault(); lock(); }
+  else if (k === 'escape' && !document.querySelector('dialog[open]')) { if (document.body.classList.contains('side-open')) closeSide(); else if (S.sel || S.editing) closeDetail(); }
+});
+addEventListener('beforeunload', e => { if (S.data && S.dirty && !S.handle) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ====== Start ====== */
+document.querySelectorAll('[data-logo]').forEach(el => el.innerHTML = LOGO);
+document.querySelectorAll('[data-ico]').forEach(el => el.classList.contains('ico') ? el.innerHTML = ico(el.dataset.ico).innerHTML : el.prepend(ico(el.dataset.ico)));
+document.querySelectorAll('[data-eye]').forEach(btn => { btn.append(ico('eye')); btn.onclick = () => { const i = $('#' + btn.dataset.eye); const s = i.type === 'password'; i.type = s ? 'text' : 'password'; btn.replaceChildren(ico(s ? 'eyeoff' : 'eye')); }; });
+if (!S.fs) $('#lk-tip').textContent = 'Na telefonie wybierz plik sejfu z Dysku Google lub OneDrive. Po zmianach zapisz plik przyciskiem „Pobierz plik ze zmianami” i podmień go na Dysku.';
+(async () => {
+  claudeUse('downloads');
+  if (S.fs) { const fh = await idb.get('last'); if (fh) { S.handle = fh; S.fileName = fh.name; showLock('lk-unlock'); return; } }
+  showLock('lk-home');
+})();
+window.__sejf = { S, generate, strength, csvToEntries, parseCSV, openVault, seal, deriveKey, toCSV };
+</script>

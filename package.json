@@ -1,0 +1,14 @@
+{
+  "name": "sejf",
+  "version": "1.0.0",
+  "description": "Prosty menedżer haseł w jednym pliku HTML. Szyfrowanie AES-256-GCM, plik sejfu w Twoim folderze Dysku Google lub OneDrive.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "sh scripts/build.sh",
+    "test": "sh scripts/build.sh && node tests/e2e.test.js && node tests/sync.test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}

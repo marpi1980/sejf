@@ -1,0 +1,6 @@
+node_modules/
+test-results/
+*.csv
+!tests/fixtures/*.csv
+*.sejf.json
+hasla*.json
