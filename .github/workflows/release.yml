@@ -1,8 +1,11 @@
 name: Wydanie
 
+# Nowe wydanie powstaje samo, gdy na main trafi wersja (sejf/__init__.py),
+# dla której nie ma jeszcze wydania. Można je też uruchomić ręcznie.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,22 +14,37 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - name: Sprawdź, czy ta wersja ma już wydanie
+        id: ver
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(python -c "import re;print(re.search(r'__version__ = \"(.+?)\"', open('sejf/__init__.py').read()).group(1))")
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; else echo "exists=0" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-python@v6
+        if: steps.ver.outputs.exists == '0'
         with:
           python-version: "3.12"
-      - run: pip install -r requirements-dev.txt
-      - run: python -m unittest tests.test_core tests.test_gui
-      - run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
+      - if: steps.ver.outputs.exists == '0'
+        run: pip install -r requirements-dev.txt
+      - if: steps.ver.outputs.exists == '0'
+        run: python -m unittest tests.test_core tests.test_gui
+      - if: steps.ver.outputs.exists == '0'
+        run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
       - name: Sprawdź zbudowany program
+        if: steps.ver.outputs.exists == '0'
         shell: pwsh
         run: |
           Start-Process -Wait -FilePath dist\Sejf.exe -ArgumentList '--selftest', "$PWD\selftest.txt"
           if (-not (Select-String -Path selftest.txt -Pattern 'WYNIK: OK' -Quiet)) { Get-Content selftest.txt; exit 1 }
       - name: Opublikuj wydanie
+        if: steps.ver.outputs.exists == '0'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp web/dist/Sejf.html dist/Sejf-telefon.html
-          gh release create "$GITHUB_REF_NAME" dist/Sejf.exe dist/Sejf-telefon.html \
-            --title "Sejf $GITHUB_REF_NAME" --notes-file docs/wydanie.md
+          gh release create "${{ steps.ver.outputs.tag }}" dist/Sejf.exe dist/Sejf-telefon.html \
+            --target "$GITHUB_SHA" --title "Sejf ${{ steps.ver.outputs.tag }}" --notes-file docs/wydanie.md

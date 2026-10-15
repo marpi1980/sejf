@@ -108,7 +108,7 @@ python -m unittest tests.test_core tests.test_gui
 pyinstaller --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
 ```
 
-Przy każdej zmianie GitHub Actions uruchamia testy na Linuksie i Windows (w tym test okien ze zrzutami ekranu), buduje `Sejf.exe` i sprawdza, czy zbudowany program działa. Nowe wydanie powstaje po wypchnięciu tagu, np. `git tag v2.0.1 && git push --tags`.
+Przy każdej zmianie GitHub Actions uruchamia testy na Linuksie i Windows (w tym test okien ze zrzutami ekranu), buduje `Sejf.exe` i sprawdza, czy zbudowany program działa. Nowe wydanie z plikiem `Sejf.exe` powstaje samo, gdy na gałąź `main` trafi nowy numer wersji w `sejf/__init__.py`.
 
 ## Licencja
 
