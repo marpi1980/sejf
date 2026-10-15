@@ -4,3 +4,8 @@ test-results/
 !tests/fixtures/*.csv
 *.sejf.json
 hasla*.json
+__pycache__/
+*.pyc
+/build/
+/dist/
+*.spec

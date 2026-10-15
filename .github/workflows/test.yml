@@ -5,8 +5,68 @@ on:
   pull_request:
 
 jobs:
-  test:
+  rdzen:
+    name: Rdzeń (Linux)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m unittest -v tests.test_core
+
+  windows:
+    name: Program na Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Testy rdzenia i okien
+        shell: bash
+        run: |
+          mkdir -p test-results
+          set -o pipefail
+          python -m unittest -v tests.test_core tests.test_gui 2>&1 | tee test-results/log.txt
+      - name: Zbuduj Sejf.exe
+        if: always()
+        run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
+      - name: Sprawdź zbudowany program
+        if: always()
+        shell: pwsh
+        run: |
+          Start-Process -Wait -FilePath dist\Sejf.exe -ArgumentList '--selftest', "$PWD\test-results\selftest.txt"
+          Get-Content test-results\selftest.txt
+          if (-not (Select-String -Path test-results\selftest.txt -Pattern 'WYNIK: OK' -Quiet)) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sejf-windows
+          path: |
+            dist/Sejf.exe
+            test-results/
+      - name: Zrzuty do gałęzi ci-zrzuty (tymczasowe)
+        if: always() && github.ref == 'refs/heads/gui'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/z" && cp -r test-results/. "$RUNNER_TEMP/z/" || true
+          cd "$RUNNER_TEMP/z" && git init -q && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm zrzuty
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci-zrzuty
+
+  web:
+    name: Wersja w przeglądarce
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,5 +75,5 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: npm test
-      - name: Sprawdź, czy dist/ jest zbudowany z aktualnego src/
+      - name: Sprawdź, czy web/dist/ jest zbudowany z aktualnego web/src/
         run: git diff --exit-code dist/

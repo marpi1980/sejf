@@ -11,5 +11,4 @@ mkdir -p dist
   cat src/app.html
   printf '%s\n' '</body>' '</html>'
 } > dist/Sejf.html
-cp "src/Uruchom Sejf.cmd" "dist/Uruchom Sejf.cmd"
 echo "Zbudowano dist/Sejf.html"

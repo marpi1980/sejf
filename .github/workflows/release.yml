@@ -1,0 +1,32 @@
+name: Wydanie
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m unittest tests.test_core tests.test_gui
+      - run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
+      - name: Sprawdź zbudowany program
+        shell: pwsh
+        run: |
+          Start-Process -Wait -FilePath dist\Sejf.exe -ArgumentList '--selftest', "$PWD\selftest.txt"
+          if (-not (Select-String -Path selftest.txt -Pattern 'WYNIK: OK' -Quiet)) { Get-Content selftest.txt; exit 1 }
+      - name: Opublikuj wydanie
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp web/dist/Sejf.html dist/Sejf-telefon.html
+          gh release create "$GITHUB_REF_NAME" dist/Sejf.exe dist/Sejf-telefon.html \
+            --title "Sejf $GITHUB_REF_NAME" --notes-file docs/wydanie.md
