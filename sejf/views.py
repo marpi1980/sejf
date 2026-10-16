@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import connect, crypto, kinds, vault
 from .kinds import BY_KEY, KINDS, kind_of
 from .session import ME, Session
-from .widgets import VAULT_TYPES, ScrollFrame, StrengthBar, cloud_folder, focus_later, readonly
+from .widgets import VAULT_TYPES, ScrollFrame, StrengthBar, cloud_folder, focus_later, later, readonly
 
 SEP = "|"
 
@@ -265,7 +265,7 @@ class MainView(ttk.Frame):
 
         self.detail = DetailPanel(self.paned, app, self)
         self.paned.add(self.detail, weight=2)
-        self.after(30, self._init_sashes)
+        later(self, 30, self._init_sashes)
         self.refresh()
 
     def _placeholder(self):
@@ -290,7 +290,7 @@ class MainView(ttk.Frame):
         self._hint_text = hint
         e.bind("<FocusIn>", hide, add="+")
         e.bind("<FocusOut>", show, add="+")
-        self.after(50, show)
+        later(self, 50, show)
 
     def _focused(self, w) -> bool:
         try:
@@ -1236,7 +1236,7 @@ class DetailPanel(ttk.Frame):
         self._collect()
         self.editing["accounts"].append(vault.new_account())
         self._render_form()
-        self.after(50, lambda: self.sf.canvas.yview_moveto(1.0) if self.sf.winfo_exists() else None)
+        later(self.sf, 50, lambda: self.sf.canvas.yview_moveto(1.0))
 
     def _remove_account(self, i: int):
         self._collect()

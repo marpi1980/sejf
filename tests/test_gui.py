@@ -164,7 +164,12 @@ class GuiFlow(unittest.TestCase):
             row["label"].set(label); row["username"].set(user); row["password"].set(pw)
         main.detail._remove_account(2)
         main.detail._add_account()
-        self.pump()
+        for _ in range(30):  # szybkie przebudowy formularza nie mogą niczego usunąć ani wyczyścić
+            main.detail._collect()
+            main.detail._render_form()
+        self.pump(0.5)
+        self.assertEqual([a.get("username") for a in main.detail.editing["accounts"]],
+                         ["ACME\\svc_backup", ".\\Administrator", ""])
         shot(self.root, "04-formularz-serwer")
         main.detail.save()
         srv = next(e for e in app.s.profiles[next(iter(app.s.profiles))].data["entries"] if e["type"] == "server")

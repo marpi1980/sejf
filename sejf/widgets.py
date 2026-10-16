@@ -170,9 +170,28 @@ class Dialog(tk.Toplevel):
         return out
 
 
+def later(widget, ms: int, fn) -> None:
+    """Opóźnione wywołanie zaplanowane na oknie głównym, nie na widżecie.
+
+    Tkinter usuwa polecenia widżetu przy jego zniszczeniu, ale zaplanowane zadanie zostaje;
+    jego nazwa może trafić do nowego polecenia (np. przycisku) i uruchomić je bez kliknięcia.
+    Okno główne żyje przez cały czas działania programu, więc tam to bezpieczne.
+    """
+    root = widget._root()
+
+    def run():
+        try:
+            if widget.winfo_exists():
+                fn()
+        except tk.TclError:
+            pass
+
+    root.after(ms, run)
+
+
 def focus_later(widget, ms: int = 40) -> None:
     """Ustawia fokus po chwili, o ile pole nadal istnieje (formularz mógł zostać przebudowany)."""
-    widget.after(ms, lambda: widget.winfo_exists() and widget.focus_set())
+    later(widget, ms, widget.focus_set)
 
 
 def readonly(parent, value: str, app, secret: bool = False, width: int = 0) -> ttk.Entry:
