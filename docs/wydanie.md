@@ -5,12 +5,11 @@
 
 Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochronił ten komputer”, bo program nie ma płatnego podpisu cyfrowego. Kliknij **Więcej informacji → Uruchom mimo to**.
 
-## Nowości w 3.1
+## Nowości w 3.2: bezpieczeństwo
 
-- **Komputer / stanowisko**: nowy typ wpisu z danymi użytkownika, nazwą komputera, logowaniem do Windows, pocztą, dyskiem sieciowym, zdalną pomocą (RustDesk, AnyDesk, TeamViewer, RDP), kluczem BitLocker, licencjami i gwarancją.
-- **Kilka kont na jednym urządzeniu**: przycisk „＋ Dodaj kolejne konto” (np. lokalny administrator, konto serwisowe, konto kopii zapasowych).
-- **Konsola zarządzania serwera** (iDRAC / iLO / IPMI) z użytkownikiem i hasłem oraz przyciskiem otwierającym konsolę.
-- **Dopasowanie formularzy**: zbędne pola usuwasz krzyżykiem ✕ i przywracasz przez „＋ Dodaj pole”. Możesz też dodawać własne pola, także jako stały element nowych wpisów danego typu.
-- Poprawka: zapis wpisu nie zamyka już jego podglądu.
+- **Argon2id** zamiast PBKDF2: zgadywanie hasła kartami graficznymi jest wielokrotnie trudniejsze. Sejf i profile przechodzą na nowy format same przy pierwszym otwarciu. Nowe hasło główne musi mieć co najmniej 10 znaków i ocenę „Silne”.
+- **Osobny klucz dla każdej osoby w profilu**: współpracowników dodajesz ich kodem (Ustawienia → Mój kod), bez przekazywania hasła. „Odbierz dostęp” wymienia klucz profilu, więc ta osoba nie otworzy już aktualnej wersji. Dostęp hasłem profilu jest opcjonalny.
+- **Dziennik zmian w profilu**: kto i kiedy dodał, zmienił, usunął wpis, skopiował lub wyświetlił hasło, połączył się z urządzeniem.
+- **Blokada razem z Windows**: sejf blokuje się przy Win+L i po uśpieniu komputera.
 
-Pliki sejfu i profile z wersji 3.0 otwierają się bez zmian.
+**Ważne:** wszystkie osoby korzystające ze wspólnych profili muszą zaktualizować program do wersji 3.2. Starsze wersje nie otworzą przeniesionych plików.

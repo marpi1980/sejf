@@ -705,7 +705,7 @@ class DetailPanel(ttk.Frame):
         members = p.data.get("members") or []
         names = ", ".join(m.get("name") or "?" for m in members[:4]) + (f" i {len(members) - 4} innych" if len(members) > 4 else "")
         access = "Osoby z dostępem: " + names + ("  ·  dostęp hasłem włączony" if (p.data.get("access") or {}).get("password") else "")
-        ttk.Label(self.body, text=access, style="Small.TLabel", wraplength=self.app.px(440), justify="left").pack(anchor="w", pady=(8, 0))
+        ttk.Label(self.body, text=access, style="Small.TLabel", wraplength=self.app.px(380), justify="left").pack(anchor="w", pady=(8, 0))
         info = p.data.get("info") or {}
         grid = ttk.Frame(self.body)
         grid.pack(fill="x", pady=(18, 0))
@@ -1050,7 +1050,7 @@ class DetailPanel(ttk.Frame):
             ttk.Label(cell, text=text.upper(), style="Field.TLabel").pack(side="left")
             x = ttk.Label(cell, text="✕", style="Small.TLabel", cursor="hand2")
             x.pack(side="right")
-            x.bind("<Button-1>", lambda ev: on_remove())
+            x.bind("<ButtonRelease-1>", lambda ev=None: on_remove() if ev is not None and ev.widget is x else None)
 
         col = 0
         for f in shown:

@@ -15,19 +15,23 @@ Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochron
 ## Jak to działa
 
 ```
- Twój sejf (hasla.sejf.json)          Wspólny folder zespołu
- hasło główne + Google Authenticator   ┌──────────────────────┐
- ┌─────────────────────────────┐       │ ACME.sejfklient      │◄── Ty
- │ Moje hasła                  │       │ Biuro Rachunkowe.…   │◄── Ty, Anna
- │ Hasła do profili klientów ──┼──────►│ Przychodnia.…        │◄── Anna
- └─────────────────────────────┘       └──────────────────────┘
+ Twój sejf (hasla.sejf.json)               Wspólny folder zespołu
+ hasło główne (Argon2id)                   ┌───────────────────────────┐
+ + Google Authenticator                    │ ACME.sejfklient           │  osoby: Ty, Anna
+ ┌──────────────────────────────┐          │ Biuro Rachunkowe.…        │  osoby: Ty
+ │ Moje hasła                   │          │ Przychodnia.…             │  osoby: Anna, Piotr
+ │ Twój klucz osobisty ─────────┼─────────►└───────────────────────────┘
+ │ lista Twoich profili         │   każdy profil ma klucz opakowany osobno dla każdej osoby
+ └──────────────────────────────┘
 ```
 
-- **Osobisty sejf** chroni hasło główne. Są w nim Twoje własne hasła oraz hasła do profili klientów.
-- **Profil klienta** to osobny plik `.sejfklient` z własnym hasłem. Gdy dodasz profil, program zapisze jego hasło w Twoim sejfie, więc przy kolejnych uruchomieniach profil otwiera się sam.
-- **Przekazanie profilu**: druga osoba dostaje plik (albo dostęp do wspólnego folderu) i hasło profilu. W swoim programie wybiera **＋ Klient → Dodaj profil z pliku** i raz wpisuje hasło.
+- **Osobisty sejf** chroni hasło główne. Są w nim Twoje własne hasła, lista profili klientów i Twój klucz osobisty.
+- **Profil klienta** to osobny plik `.sejfklient`. Jego dane szyfruje losowy klucz profilu, a ten klucz jest zapisany osobno dla każdej osoby z dostępem, zaszyfrowany jej kluczem. Nikt nie musi znać żadnego wspólnego hasła.
+- **Dodanie osoby**: współpracownik kopiuje swój kod (**Ustawienia → Mój kod**) i Ci go wysyła. Ty wklejasz kod w oknie **Udostępnij**. On wybiera **＋ Klient → Dodaj profil z pliku** i profil otwiera się bez hasła.
+- **Odebranie dostępu**: **Udostępnij → Odbierz dostęp**. Profil dostaje nowy klucz, którego ta osoba już nie otrzyma. Kto wcześniej skopiował plik, nadal otworzy tę starą kopię, dlatego przy odejściu pracownika zmień też hasła do samych urządzeń.
+- **Dostęp hasłem profilu** (opcjonalny, domyślnie wyłączony): każdy, kto zna hasło, otworzy profil i zostanie dopisany do osób. Wygodne przy pierwszym przekazaniu, ale bezpieczniej dodawać osoby kodami.
 - **Praca zespołowa**: gdy kilka osób pracuje na tym samym pliku we wspólnym folderze, program łączy zmiany. Wpis dodany przez Annę i wpis dodany przez Ciebie zostaną oba, a przy zmianie tego samego wpisu wygrywa nowsza zmiana.
-- **Odebranie dostępu**: zmień hasło profilu (**Zmień hasło profilu…**). Osoby, które go używają, zostaną poproszone o nowe hasło. Kto wcześniej skopiował plik, nadal otworzy tę starą kopię starym hasłem, dlatego przy odejściu pracownika zmień też hasła do samych urządzeń.
+- **Dziennik zmian** profilu pokazuje, kto i kiedy dodał, zmienił lub usunął wpis, skopiował albo wyświetlił hasło, połączył się z urządzeniem, dodał lub usunął osobę.
 
 ## Co potrafi
 
@@ -68,6 +72,7 @@ Pozostałe funkcje:
 - **Wyszukiwarka** przeszukuje nazwy, adresy IP, loginy, modele, lokalizacje i notatki we wszystkich profilach naraz, także bez polskich znaków („serwerownia”, „10.10.0”, „aruba”).
 - **Karta klienta**: pełna nazwa firmy, NIP, adres, osoba kontaktowa, telefon, umowa serwisowa i notatki.
 - **Import list urządzeń** z arkusza CSV z kolumnami takimi jak Typ, Nazwa, IP, Login, Hasło, Model, Lokalizacja (także ze średnikami i z polskiego Excela) oraz import haseł z Chrome, Edge, Firefox, Bitwarden, KeePass i 1Password.
+- **Blokada razem z Windows**: sejf blokuje się, gdy zablokujesz komputer (Win+L) albo komputer przejdzie w uśpienie.
 - **Weryfikacja dwuetapowa** kodem z Google Authenticator (lub Microsoft Authenticator, Authy). Program prosi o kod na każdym nowym komputerze i potem okresowo: przy każdym odblokowaniu, raz dziennie, raz w tygodniu, co 2 tygodnie albo co 30 dni. Do tego 8 jednorazowych kodów zapasowych.
 - **Generator haseł** oraz ocena siły hasła i ostrzeżenie o tym samym haśle w kilku miejscach.
 - **Schowek z auto-czyszczeniem**. Skopiowane hasła nie trafiają do historii schowka Windows (Win+V) ani do schowka w chmurze.
@@ -78,9 +83,10 @@ Pozostałe funkcje:
 ## Pierwsze uruchomienie
 
 1. Kliknij **Utwórz nowy sejf…**, ustaw hasło główne i zapisz plik sejfu.
-2. Dodaj klienta: **＋ Klient → Nowy profil klienta…**. Program zaproponuje losowe hasło profilu i miejsce pliku obok Twojego sejfu. Jeśli profil ma być wspólny, wybierz folder zespołu.
-3. W profilu dodawaj wpisy przyciskiem **＋ Nowy wpis**, wybierając typ (serwer, switch, VPN…).
-4. W **Ustawieniach** włącz weryfikację dwuetapową i zapisz kody zapasowe.
+2. W **Ustawienia → Mój kod…** wpisz swoje imię i nazwisko. Tak zobaczą Cię współpracownicy na listach osób i w dziennikach.
+3. Dodaj klienta: **＋ Klient → Nowy profil klienta…**. Jeśli profil ma być wspólny, wybierz folder zespołu. Współpracowników dodasz w oknie **Udostępnij** ich kodami.
+4. W profilu dodawaj wpisy przyciskiem **＋ Nowy wpis**, wybierając typ (serwer, komputer, switch, VPN…).
+5. W **Ustawieniach** włącz weryfikację dwuetapową i zapisz kody zapasowe.
 
 Skróty klawiszowe: **Ctrl+N** nowy wpis, **Ctrl+F** wyszukiwanie, **Ctrl+L** blokada, **Ctrl+S** zapis edytowanego wpisu. Na liście: **dwuklik** lub **Ctrl+C** kopiuje hasło, **Ctrl+B** kopiuje login, **Delete** usuwa wpis, prawy przycisk myszy otwiera menu (także na profilu w drzewie po lewej).
 
@@ -90,52 +96,77 @@ Skróty klawiszowe: **Ctrl+N** nowy wpis, **Ctrl+F** wyszukiwanie, **Ctrl+L** bl
 
 | Element | Rozwiązanie |
 |---|---|
-| Szyfrowanie | AES-256-GCM, losowy 12-bajtowy IV przy każdym zapisie; osobny klucz dla sejfu i dla każdego profilu |
-| Klucz | PBKDF2-HMAC-SHA256, 600 000 iteracji, losowa 16-bajtowa sól na plik |
-| Hasła profili | Zapisane wyłącznie wewnątrz zaszyfrowanego osobistego sejfu |
-| Integralność | Tag uwierzytelniający GCM wykrywa każdą zmianę pliku i złe hasło; pliku profilu nie da się otworzyć jako sejfu i odwrotnie |
-| Zapis | Najpierw do pliku tymczasowego, potem podmiana, więc przerwany zapis nie uszkodzi pliku |
-| Weryfikacja dwuetapowa | TOTP (RFC 6238); zapamiętanie komputera podpisane kluczem sejfu, więc nie da się go podrobić edycją pliku ustawień |
+| Hasło główne | Argon2id (64 MiB pamięci, 2 przebiegi), losowa 16-bajtowa sól; wymagane co najmniej 10 znaków i ocena „Silne” |
+| Szyfrowanie danych | AES-256-GCM, losowy 12-bajtowy IV przy każdym zapisie |
+| Klucze profili | Losowy 256-bitowy klucz profilu, opakowany dla każdej osoby przez X25519 + HKDF-SHA256 + AES-256-GCM; dla hasła profilu przez Argon2id |
+| Odebranie dostępu | Nowy klucz profilu i wyłączenie dostępu hasłem |
+| Integralność | Tag uwierzytelniający GCM wykrywa każdą zmianę pliku i złe hasło; dane profilu są związane z identyfikatorem klucza |
+| Dziennik | Zapisy o zmianach, kopiowaniu i wyświetlaniu haseł w zaszyfrowanym pliku profilu |
+| Blokada | Po bezczynności, przy zablokowaniu Windows (Win+L) i po uśpieniu komputera |
+| Weryfikacja dwuetapowa | TOTP (RFC 6238); zapamiętanie komputera podpisane kluczem sejfu |
 | Schowek | Hasła wykluczone z historii schowka i synchronizacji w chmurze; czyszczenie tylko wtedy, gdy w schowku nadal jest to samo hasło |
-| Połączenia | Adresy i loginy sprawdzane przed uruchomieniem RDP/SSH, żeby wpis nie mógł wykonać innego polecenia |
+| Zapis | Najpierw do pliku tymczasowego, potem podmiana, więc przerwany zapis nie uszkodzi pliku |
 | Sieć | Program nie wykonuje żadnych połączeń sieciowych |
+
+Starsze pliki (sejf i profile z wersji 3.1 i wcześniejszych, z PBKDF2) są przenoszone na nowy format automatycznie przy pierwszym otwarciu. **Wszystkie osoby korzystające ze wspólnych profili muszą mieć wersję 3.2 lub nowszą**, bo starsze wersje nie otworzą przeniesionych plików.
 
 Ograniczenia, o których warto wiedzieć:
 
-- **Weryfikacja dwuetapowa chroni dostęp przez program**, a nie sam plik. Nie zatrzyma kogoś, kto ma plik sejfu, zna hasło główne i odszyfruje plik własnym narzędziem albo wersją przeglądarkową. Dlatego hasło główne nadal jest najważniejszą ochroną.
+- **Hasło główne nadal jest najważniejsze.** Ktoś, kto ma plik sejfu i zna hasło, odszyfruje go własnym narzędziem. Argon2id bardzo utrudnia zgadywanie hasła, ale nie zastąpi długiego hasła.
+- **Weryfikacja dwuetapowa i dziennik działają w programie.** Nie zatrzymają kogoś, kto ma dostęp do profilu i celowo odczyta plik innym narzędziem.
+- **Każda osoba z dostępem może zarządzać listą osób.** Nie ma ról (np. tylko odczyt), bo nie ma serwera, który by ich pilnował.
 - Python nie pozwala na pewne wymazanie danych z pamięci. Po zablokowaniu program usuwa odwołania do kluczy i haseł, ale ich kopie mogą przez chwilę pozostać w pamięci procesu.
-- To projekt hobbystyczny bez zewnętrznego audytu bezpieczeństwa.
+- To projekt hobbystyczny bez zewnętrznego audytu bezpieczeństwa. Przed użyciem w firmie warto dać do przejrzenia pliki `sejf/crypto.py` i `sejf/session.py` osobie znającej kryptografię.
 
 ### Format plików
 
-Oba rodzaje plików to JSON, który można odszyfrować standardowymi narzędziami:
+Osobisty sejf:
 
 ```json
 {
- "format": "sejf-vault",
- "version": 1,
- "kdf": { "name": "PBKDF2-SHA256", "iterations": 600000, "salt": "<base64>" },
+ "format": "sejf-vault", "version": 2,
+ "kdf": { "name": "argon2id", "m": 65536, "t": 2, "p": 1, "salt": "<base64>" },
  "cipher": { "name": "AES-256-GCM", "iv": "<base64>" },
- "data": "<base64: szyfrogram + 16-bajtowy tag>"
+ "data": "<base64: szyfrogram + tag>"
 }
 ```
 
-Osobisty sejf ma `"format": "sejf-vault"` i dane dodatkowe (AAD) `sejf-vault/1`. Profil klienta ma `"format": "sejf-profile"` i AAD `sejf-profile/1`. Hasła są normalizowane do postaci Unicode NFC. Nazwa klienta i wszystkie dane są tylko w zaszyfrowanej części.
+Klucz = Argon2id(hasło w Unicode NFC), AAD = `sejf-vault/1`.
+
+Profil klienta:
+
+```json
+{
+ "format": "sejf-profile", "version": 2,
+ "keys": {
+  "keyid": "<base64, 16 B>",
+  "recipients": [
+   { "kid": "<odcisk klucza osoby>", "epk": "<X25519, efemeryczny>", "iv": "…", "wk": "<klucz profilu, AES-GCM>" },
+   { "kid": "password", "kdf": { "name": "argon2id", … }, "iv": "…", "wk": "…" }
+  ]
+ },
+ "cipher": { "name": "AES-256-GCM", "iv": "<base64>" },
+ "data": "<base64>"
+}
+```
+
+Klucz opakowania = HKDF-SHA256(X25519(efemeryczny, klucz osoby), salt = keyid, info = `sejf-wrap/2` ‖ epk ‖ klucz osoby); AAD opakowania = `sejf-wrap/2:` ‖ keyid; AAD danych = `sejf-profile/2:` ‖ keyid. Nazwa klienta, lista osób i dziennik są tylko w zaszyfrowanej części.
 
 ## Telefon
 
-Wersja przeglądarkowa z folderu [`web/`](web/) (w wydaniach jako `Sejf-telefon.html`) otwiera osobisty sejf, czyli Twoje własne hasła. Profili klientów na telefonie na razie nie obsługuje. Przeglądarki na telefonach nie otwierają lokalnych plików HTML, więc tę wersję trzeba udostępnić pod adresem internetowym, np. przez GitHub Pages.
+Wersja przeglądarkowa z folderu [`web/`](web/) (w wydaniach jako `Sejf-telefon.html`) otwiera osobisty sejf, czyli Twoje własne hasła. Ma własną implementację Argon2id w JavaScripcie, sprawdzaną testami z RFC 9106 i z wynikami programu na Windows; odblokowanie na telefonie trwa kilka sekund. Profili klientów na telefonie na razie nie obsługuje. Przeglądarki na telefonach nie otwierają lokalnych plików HTML, więc tę wersję trzeba udostępnić pod adresem internetowym, np. przez GitHub Pages.
 
 ## Rozwój
 
 ```
 sejf/            kod programu
-  crypto.py      szyfrowanie i format plików
-  session.py     otwarte pliki: zapis, łączenie zmian, profile klientów, 2FA
+  crypto.py      szyfrowanie, Argon2id, klucze osób, format plików
+  session.py     otwarte pliki: zapis, łączenie zmian, profile, osoby, dziennik, 2FA
   vault.py       wpisy, kategorie, tagi, wyszukiwanie, łączenie wersji
   kinds.py       typy wpisów (serwer, switch, VPN…) i ich pola
   connect.py     RDP, SSH, przeglądarka, udział sieciowy, ping
   totp.py        kody z aplikacji Authenticator i kody zapasowe
+web/src/argon2.js  Argon2id w JavaScripcie dla wersji przeglądarkowej
   csvio.py       import i eksport CSV
   generator.py   generator i ocena siły haseł
   clipboard.py   schowek wykluczony z historii Windows
