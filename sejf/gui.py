@@ -360,11 +360,12 @@ class App:
         self.clip_text = None
 
     def connect(self, e, action):
+        secret = e.get("password") if action.copy_key == "password" else (e.get("extra") or {}).get(action.copy_key)
         try:
-            if action.copy_password and e.get("password"):
-                self.copy(e["password"], "hasło", secret=True)
+            if action.copy_password and secret:
+                self.copy(secret, "hasło", secret=True)
             connect.run(action)
-            if action.copy_password and e.get("password"):
+            if action.copy_password and secret:
                 self.flash("Hasło jest w schowku. Wklej je w oknie logowania (Ctrl+V).", 6000)
         except (OSError, FileNotFoundError) as err:
             messagebox.showerror(action.label, f"Nie udało się uruchomić: {err}", parent=self.root)

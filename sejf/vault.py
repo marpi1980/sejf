@@ -76,7 +76,8 @@ def new_entry(**fields) -> dict:
     t = now_iso()
     e = {
         "id": new_id(), "type": "web", "title": "", "username": "", "password": "", "url": "", "notes": "",
-        "category": "", "tags": [], "fav": False, "extra": {}, "created": t, "updated": t, "history": [],
+        "category": "", "tags": [], "fav": False, "extra": {}, "accounts": [], "created": t, "updated": t,
+        "history": [],
     }
     e.update(fields)
     return e
@@ -101,8 +102,24 @@ def normalize_entry(e: dict) -> dict:
         if isinstance(e.get("extra"), dict) else {},
         "created": created, "updated": e.get("updated") or created,
         "history": list(e.get("history") or [])[:HISTORY_LIMIT],
+        "accounts": [normalize_account(a) for a in (e.get("accounts") or []) if isinstance(a, dict)],
     })
     return out
+
+
+def new_account(**fields) -> dict:
+    return {"id": new_id(), "label": "", "username": "", "password": "", **fields}
+
+
+def normalize_account(a: dict) -> dict:
+    return {**a, "id": a.get("id") or new_id(), "label": _s(a.get("label")), "username": _s(a.get("username")),
+            "password": _s(a.get("password"))}
+
+
+def clean_accounts(accounts: list[dict]) -> list[dict]:
+    """Pomija puste wiersze z formularza."""
+    return [normalize_account(a) for a in accounts
+            if (a.get("label") or "").strip() or (a.get("username") or "").strip() or a.get("password")]
 
 
 def _entries(v: dict) -> list[dict]:
@@ -317,9 +334,19 @@ def reused_by(entries: list[dict], entry: dict) -> list[dict]:
 def update_entry(e: dict, fields: dict) -> None:
     """Zmienia wpis; poprzednie hasło trafia do historii."""
     t = now_iso()
+    old_items = []
     new_pw = fields.get("password", e["password"])
     if e["password"] and new_pw != e["password"]:
-        e["history"] = ([{"password": e["password"], "changed": t}] + e["history"])[:HISTORY_LIMIT]
+        old_items.append({"password": e["password"], "changed": t, "login": e.get("username", "")})
+    if "accounts" in fields:  # zmienione lub usunięte hasła dodatkowych kont też trafiają do historii
+        new_by_id = {a["id"]: a for a in fields["accounts"]}
+        for a in e.get("accounts") or []:
+            n = new_by_id.get(a["id"])
+            if a.get("password") and (n is None or n.get("password") != a["password"]):
+                old_items.append({"password": a["password"], "changed": t, "login": a.get("username", ""),
+                                  "label": a.get("label", "")})
+    if old_items:
+        e["history"] = (old_items + e["history"])[:HISTORY_LIMIT]
     e.update(fields)
     e["updated"] = t
 

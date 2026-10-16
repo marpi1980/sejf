@@ -764,6 +764,9 @@ class DetailPanel(ttk.Frame):
         act = connect.plan(e)
         if act and (connect.available() or act.kind == "url"):
             ttk.Button(acts, text=act.label, style="Accent.TButton", command=lambda: app.connect(e, act)).pack(side="left", padx=(0, 6))
+        con = connect.console_action(e)
+        if con:
+            ttk.Button(acts, text=con.label, command=lambda: app.connect(e, con)).pack(side="left", padx=(0, 6))
         sh = connect.share_action(e)
         if sh and connect.available() and not (act and act.kind == "open"):
             ttk.Button(acts, text="Otwórz udział", command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
@@ -806,6 +809,9 @@ class DetailPanel(ttk.Frame):
             row[0] += 1
             return ent
 
+        if e.get("accounts") and (e["username"] or e["password"]):
+            ttk.Label(grid, text="Konto główne", style="Strong.TLabel").grid(row=row[0], column=0, columnspan=3, sticky="w")
+            row[0] += 1
         if k.uses_login or e["username"]:
             field("Login", e["username"], copy_what="login")
         if k.uses_login or e["password"]:
@@ -821,6 +827,17 @@ class DetailPanel(ttk.Frame):
                               style="Warn.TLabel", wraplength=app.px(400), justify="left").grid(
                         row=row[0], column=1, columnspan=2, sticky="w", pady=(0, 6))
                     row[0] += 1
+        for i, a in enumerate(e.get("accounts") or []):
+            ttk.Label(grid, text=a.get("label") or f"Konto {i + 2}", style="Strong.TLabel").grid(
+                row=row[0], column=0, columnspan=3, sticky="w", pady=(12, 0))
+            row[0] += 1
+            if a.get("username"):
+                field("Login", a["username"], copy_what="login")
+            if a.get("password"):
+                field("Hasło", a["password"], secret=True, copy_what="hasło")
+        if e.get("accounts"):
+            ttk.Separator(grid).grid(row=row[0], column=0, columnspan=3, sticky="ew", pady=(10, 4))
+            row[0] += 1
         for f in k.fields:
             v = ex.get(f.key, "")
             if not v:
@@ -870,6 +887,7 @@ class DetailPanel(ttk.Frame):
                                    "password": src["password"], "url": src["url"], "category": src["category"],
                                    "tags": ", ".join(src["tags"]), "notes": src["notes"], "fav": src["fav"],
                                    "target": dict(targets).get(sid, "Moje hasła"), **(src.get("extra") or {})},
+                        "accounts": [dict(a) for a in src.get("accounts") or []],
                         "show_pw": False}
         self._render_form()
 
@@ -880,6 +898,9 @@ class DetailPanel(ttk.Frame):
             ed["values"][key] = var.get()
         ed["values"]["notes"] = self.notes.get("1.0", "end-1c")
         ed["values"]["type"] = self.type_key()
+        for a, row in zip(ed["accounts"], self.acc_vars):
+            for key, var in row.items():
+                a[key] = var.get()
 
     def type_key(self) -> str:
         label = self.vars["type_label"].get()
@@ -898,6 +919,7 @@ class DetailPanel(ttk.Frame):
         g.columnconfigure(0, weight=1, uniform="c")
         g.columnconfigure(1, weight=1, uniform="c")
         self.vars = {}
+        self.acc_vars = []
         r = [0]
 
         def var(key, value="", cls=tk.StringVar):
@@ -954,6 +976,36 @@ class DetailPanel(ttk.Frame):
             ttk.Checkbutton(g, text="Pokaż hasło", variable=showv, command=toggle).grid(row=r[0], column=0, sticky="w", pady=(4, 0))
             self.vars["password"].trace_add("write", lambda *a: meter.set(self.vars["password"].get()))
             self.pw_entry = pw
+            r[0] += 1
+        if kinds.has_accounts(k):
+            for i, a in enumerate(ed["accounts"]):
+                box = ttk.Frame(g)
+                box.grid(row=r[0], column=0, columnspan=2, sticky="ew", pady=(12, 0))
+                box.columnconfigure(0, weight=1, uniform="a")
+                box.columnconfigure(1, weight=1, uniform="a")
+                rv = {key: tk.StringVar(value=a.get(key, "")) for key in ("label", "username", "password")}
+                self.acc_vars.append(rv)
+                top = ttk.Frame(box)
+                top.grid(row=0, column=0, columnspan=2, sticky="ew")
+                ttk.Label(top, text=f"DODATKOWE KONTO {i + 1}", style="Field.TLabel").pack(side="left")
+                ttk.Button(top, text="Usuń konto", command=lambda i=i: self._remove_account(i)).pack(side="right")
+                ttk.Label(box, text="OPIS", style="Field.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 3))
+                ttk.Entry(box, textvariable=rv["label"]).grid(row=2, column=0, columnspan=2, sticky="ew")
+                ttk.Label(box, text="LOGIN", style="Field.TLabel").grid(row=3, column=0, sticky="w", pady=(8, 3))
+                ttk.Label(box, text="HASŁO", style="Field.TLabel").grid(row=3, column=1, sticky="w", pady=(8, 3), padx=(10, 0))
+                ttk.Entry(box, textvariable=rv["username"]).grid(row=4, column=0, sticky="ew")
+                apr = ttk.Frame(box)
+                apr.grid(row=4, column=1, sticky="ew", padx=(10, 0))
+                aw = ttk.Entry(apr, textvariable=rv["password"], show="" if ed["show_pw"] else "•", font=app.mono)
+                aw.pack(side="left", fill="x", expand=True)
+                self.secret_entries.append(aw)
+                ttk.Button(apr, text="Generuj…", command=lambda i=i: app.open_generator(
+                    lambda v, i=i: self._use_generated(v, i))).pack(side="left", padx=(6, 0))
+                r[0] += 1
+            ttk.Button(g, text="＋ Dodaj kolejne konto", command=self._add_account).grid(
+                row=r[0], column=0, sticky="w", pady=(10, 0))
+            ttk.Label(g, text="np. konto serwisowe, kopii zapasowych, lokalny administrator", style="Small.TLabel").grid(
+                row=r[0], column=1, sticky="w", pady=(10, 0), padx=(10, 0))
             r[0] += 1
         if k.key == "wifi":
             lab("Hasło Wi-Fi", 0, 2)
@@ -1027,10 +1079,24 @@ class DetailPanel(ttk.Frame):
             val["protocol"] = after.protocol
         self._render_form()
 
-    def _use_generated(self, value):
-        self.vars["password"].set(value)
-        self.editing["show_pw"] = True
+    def _use_generated(self, value, account: int | None = None):
         self._collect()
+        if account is None:
+            self.editing["values"]["password"] = value
+        else:
+            self.editing["accounts"][account]["password"] = value
+        self.editing["show_pw"] = True
+        self._render_form()
+
+    def _add_account(self):
+        self._collect()
+        self.editing["accounts"].append(vault.new_account())
+        self._render_form()
+        self.after(50, lambda: self.sf.canvas.yview_moveto(1.0) if self.sf.winfo_exists() else None)
+
+    def _remove_account(self, i: int):
+        self._collect()
+        del self.editing["accounts"][i]
         self._render_form()
 
     def save(self):
@@ -1052,7 +1118,8 @@ class DetailPanel(ttk.Frame):
         fields = {"type": k.key, "title": title, "username": val.get("username", "").strip(),
                   "password": val.get("password", ""), "url": val.get("url", "").strip(),
                   "category": val["category"].strip(), "tags": vault.parse_tags(val["tags"]), "notes": val["notes"],
-                  "fav": bool(val["fav"]), "extra": extra}
+                  "fav": bool(val["fav"]), "extra": extra,
+                  "accounts": vault.clean_accounts(ed["accounts"])}
         if old:
             vault.update_entry(old, fields)
             e = old

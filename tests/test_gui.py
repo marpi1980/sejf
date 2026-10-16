@@ -154,9 +154,21 @@ class GuiFlow(unittest.TestCase):
                        host="10.10.0.10", os="Windows Server", domain="acme.local", role="AD, DNS, DHCP",
                        location="Serwerownia, szafa RACK 1")
         self.assertEqual(main.detail.vars["protocol"].get(), "RDP")
+        self.form_fill(idrac="10.10.0.110", idrac_user="root", idrac_password="iDr@c-2026")
+        # dwa dodatkowe konta, jedno puste zostanie pominięte
+        for label, user, pw in (("Konto kopii zapasowych", "ACME\\svc_backup", "B@ckup-2026"),
+                                ("Lokalny administrator", ".\\Administrator", "L0cal!Adm"), ("", "", "")):
+            main.detail._add_account()
+            row = main.detail.acc_vars[-1]
+            row["label"].set(label); row["username"].set(user); row["password"].set(pw)
+        main.detail._remove_account(2)
+        main.detail._add_account()
         self.pump()
         shot(self.root, "04-formularz-serwer")
         main.detail.save()
+        srv = next(e for e in app.s.profiles[next(iter(app.s.profiles))].data["entries"] if e["type"] == "server")
+        self.assertEqual([a["username"] for a in srv["accounts"]], ["ACME\\svc_backup", ".\\Administrator"])
+        self.assertEqual(srv["extra"]["idrac_password"], "iDr@c-2026")
         self.pump()
         main.new_entry()
         self.form_fill(type_label=BY_KEY["switch"].label)
@@ -199,6 +211,15 @@ class GuiFlow(unittest.TestCase):
         main.select(pid, srv["id"])
         self.pump(0.3)
         shot(self.root, "07-serwer")
+        main.detail.sf.canvas.yview_moveto(1.0)
+        self.pump(0.2)
+        shot(self.root, "07b-serwer-konta")
+        # edycja zmienia hasło dodatkowego konta → historia
+        main.detail.edit(pid, srv)
+        main.detail.acc_vars[0]["password"].set("Nowe-B@ckup-2027")
+        main.detail.save()
+        self.pump()
+        self.assertEqual(srv["history"][0]["login"], "ACME\\svc_backup")
         main.select(pid, sw["id"])
         self.pump(0.3)
         shot(self.root, "08-switch")

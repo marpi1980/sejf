@@ -485,6 +485,41 @@ class KindsAndConnectTests(unittest.TestCase):
         self.assertEqual(connect.plan(e(type="switch", host="sw", user="a b")).target, ["ssh", "sw"])
         self.assertEqual(connect.ping_action(e(host="10.0.0.9")).target[-1], "10.0.0.9")
 
+    def test_multiple_accounts(self):
+        v = vault.new_vault()
+        e = vault.normalize_entry(vault.new_entry(
+            type="server", title="DC01", username="administrator", password="Adm1n!",
+            accounts=[{"label": "Konto kopii zapasowych", "username": "svc_backup", "password": "B@ckup1"},
+                      {"label": "", "username": "", "password": ""}]))
+        e["accounts"] = vault.clean_accounts(e["accounts"])
+        self.assertEqual(len(e["accounts"]), 1)
+        v["entries"].append(e)
+        self.assertEqual(len(vault.filter_entries(v, query="svc_backup")), 1)
+        self.assertEqual(len(vault.filter_entries(v, query="kopii zapasowych")), 1)
+        self.assertEqual(len(vault.filter_entries(v, query="B@ckup1")), 0)  # hasła nie są przeszukiwane
+        # zmiana hasła konta i usunięcie konta trafiają do historii
+        acc = dict(e["accounts"][0], password="Nowe-B@ckup2")
+        vault.update_entry(e, {"accounts": [acc]})
+        self.assertEqual(e["history"][0]["password"], "B@ckup1")
+        self.assertEqual(e["history"][0]["login"], "svc_backup")
+        vault.update_entry(e, {"accounts": []})
+        self.assertEqual(e["history"][0]["password"], "Nowe-B@ckup2")
+        # CSV zachowuje konta
+        e["accounts"] = [vault.new_account(label="Serwis", username="serwis", password="S;e,r\"w")]
+        back = csvio.parse(csvio.to_csv([e])).entries[0]
+        self.assertEqual(back["accounts"][0]["password"], 'S;e,r"w')
+        self.assertTrue(kinds.has_accounts(kinds.BY_KEY["server"]))
+        self.assertFalse(kinds.has_accounts(kinds.BY_KEY["wifi"]))
+
+    def test_management_console(self):
+        e = vault.new_entry(type="server", extra={"idrac": "10.10.0.110", "idrac_user": "root", "idrac_password": "calvin"})
+        a = connect.console_action(e)
+        self.assertEqual((a.target, a.copy_key), ("https://10.10.0.110", "idrac_password"))
+        self.assertEqual(connect.console_action(vault.new_entry(extra={"idrac": "http://ilo01:8080/"})).target, "http://ilo01:8080/")
+        self.assertIsNone(connect.console_action(vault.new_entry(extra={"idrac": "x & calc"})))
+        self.assertIn("idrac_password", [f.key for f in kinds.secret_fields(kinds.BY_KEY["server"])])
+        self.assertEqual(len(vault.filter_entries({"entries": [vault.normalize_entry(e)]}, query="calvin")), 0)
+
     def test_expiry(self):
         from datetime import date
         lic = vault.new_entry(type="license", extra={"valid_until": "2026-11-01"})

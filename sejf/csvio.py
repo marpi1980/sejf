@@ -22,6 +22,7 @@ COLUMNS = {
     "tags": ["tags", "tagi"],
     "type": ["type", "typ", "rodzaj", "rodzaj urządzenia", "typ urządzenia", "urządzenie"],
     "extra": ["extra", "dodatkowe"],
+    "accounts": ["accounts", "konta"],
 }
 # kolumny z arkuszy inwentaryzacji IT → pola urządzeń
 EXTRA_COLUMNS = {
@@ -131,6 +132,14 @@ def parse(text: str) -> ImportResult:
         for key, i in ex_idx.items():
             if 0 <= i < len(r) and r[i].strip():
                 extra.setdefault(key, r[i].strip())
+        accounts = []
+        raw_acc = get(r, "accounts")
+        if raw_acc.startswith("["):
+            try:
+                accounts = [a for a in json.loads(raw_acc) if isinstance(a, dict)]
+            except ValueError:
+                accounts = []
+        e["accounts"] = accounts
         typ = kind_from_text(get(r, "type"))
         if not typ:
             typ = "device" if extra.get("host") and not e["url"] else "web"
@@ -161,10 +170,13 @@ def without_duplicates(existing: list[dict], incoming: list[dict]) -> list[dict]
 def to_csv(entries: list[dict]) -> str:
     buf = io.StringIO(newline="")
     w = csv.writer(buf, lineterminator="\r\n")
-    w.writerow(["name", "url", "username", "password", "note", "category", "tags", "favorite", "type", "host", "extra"])
+    w.writerow(["name", "url", "username", "password", "note", "category", "tags", "favorite", "type", "host", "extra",
+                "accounts"])
     for e in entries:
         ex = e.get("extra") or {}
         w.writerow([e["title"], e["url"], e["username"], e["password"], e["notes"], e["category"],
                     ", ".join(e["tags"]), "1" if e["fav"] else "", e.get("type", "web"), ex.get("host", ""),
-                    json.dumps(ex, ensure_ascii=False) if ex else ""])
+                    json.dumps(ex, ensure_ascii=False) if ex else "",
+                    json.dumps([{k: a.get(k, "") for k in ("label", "username", "password")} for a in e.get("accounts") or []],
+                               ensure_ascii=False) if e.get("accounts") else ""])
     return "﻿" + buf.getvalue()

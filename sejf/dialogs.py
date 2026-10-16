@@ -195,8 +195,10 @@ class HistoryDialog(Dialog):
         for h in e["history"]:
             r = ttk.Frame(b)
             r.pack(fill="x", pady=3)
-            readonly(r, h["password"], app, width=30).pack(side="left")
-            ttk.Label(r, text=vault.fmt_date(h.get("changed", "")), style="Muted.TLabel").pack(side="left", padx=10)
+            readonly(r, h["password"], app, width=26).pack(side="left")
+            who = h.get("label") or h.get("login") or ""
+            ttk.Label(r, text=(who + "  ·  " if who else "") + vault.fmt_date(h.get("changed", "")),
+                      style="Muted.TLabel").pack(side="left", padx=10)
             ttk.Button(r, text="Kopiuj", command=lambda p=h["password"]: app.copy(p, "hasło", secret=True)).pack(side="right")
         ttk.Button(b, text="Zamknij", command=self.close).pack(anchor="e", pady=(14, 0))
 

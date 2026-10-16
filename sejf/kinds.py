@@ -53,7 +53,8 @@ KINDS: tuple[Kind, ...] = (
          (HOST, PROTOCOL, PORT, Field("os", "System", "choice", ("Windows Server", "Linux", "VMware ESXi",
                                                                    "Proxmox", "Hyper-V", "inny"), mono=False),
           DOMAIN, Field("role", "Rola", hint="np. kontroler domeny, plików, ERP", mono=False),
-          Field("idrac", "Zarządzanie (iDRAC / iLO / IPMI)", hint="adres konsoli zarządzania"),
+          Field("idrac", "Konsola zarządzania (iDRAC / iLO / IPMI)", hint="adres, np. https://10.10.0.110"),
+          Field("idrac_user", "Użytkownik konsoli"), Field("idrac_password", "Hasło konsoli", "secret"),
           MODEL, SERIAL, LOCATION), protocol="RDP"),
     Kind("switch", "Przełącznik (switch)", "Przełączniki",
          (*DEVICE, Field("enable", "Hasło enable", "secret"),
@@ -112,6 +113,11 @@ def label_of(entry: dict) -> str:
     return kind_of(entry).label
 
 
+def has_accounts(kind: Kind) -> bool:
+    """Czy wpis może mieć kilka kont (np. administrator, konto serwisowe, konto kopii zapasowych)."""
+    return kind.uses_login and kind.key != "wifi"
+
+
 def secret_fields(kind: Kind) -> list[Field]:
     return [f for f in kind.fields if f.kind == "secret"]
 
@@ -136,6 +142,8 @@ def searchable(entry: dict) -> str:
     parts = [entry.get("title", ""), entry.get("username", ""), entry.get("url", ""), entry.get("notes", ""),
              entry.get("category", ""), " ".join(entry.get("tags") or []), k.label, k.group]
     parts += [str(v) for key, v in ex.items() if key not in secret and v]
+    for a in entry.get("accounts") or []:
+        parts += [a.get("label", ""), a.get("username", "")]
     return " ".join(parts)
 
 

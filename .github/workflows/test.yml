@@ -50,8 +50,8 @@ jobs:
           path: |
             dist/Sejf.exe
             test-results/
-      - name: Zrzuty ekranu do gałęzi ci-zrzuty (tylko gałąź robocza)
-        if: always() && github.ref == 'refs/heads/gui'
+      - name: Zrzuty ekranu do gałęzi ci-zrzuty (do podglądu)
+        if: always() && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

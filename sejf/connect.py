@@ -24,6 +24,7 @@ class Action:
     target: object      # adres URL, lista argumentów albo ścieżka
     label: str
     copy_password: bool = False
+    copy_key: str = "password"   # które hasło skopiować: główne albo pole z ``extra``
 
 
 def _split(entry: dict) -> tuple[str, str]:
@@ -75,6 +76,18 @@ def plan(entry: dict) -> Action | None:
         share = ((entry.get("extra") or {}).get("share") or "").strip()
         return Action("open", share if share.startswith("\\\\") else f"\\\\{host}", "Otwórz udział sieciowy", True)
     return None
+
+
+def console_action(entry: dict) -> Action | None:
+    """Konsola zarządzania serwerem (iDRAC, iLO, IPMI) w przeglądarce."""
+    v = ((entry.get("extra") or {}).get("idrac") or "").strip()
+    if not v:
+        return None
+    url = v if re.match(r"^https?://", v, re.I) else "https://" + v
+    host = re.sub(r"^https?://", "", url, flags=re.I).split("/")[0]
+    if not host or not HOST_RE.match(host.replace("[", "").replace("]", "")):
+        return None
+    return Action("url", url, "Konsola zarządzania", True, "idrac_password")
 
 
 def share_action(entry: dict) -> Action | None:
