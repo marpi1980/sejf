@@ -13,3 +13,7 @@ Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochron
 - **Blokada razem z Windows**: sejf blokuje się przy Win+L i po uśpieniu komputera.
 
 **Ważne:** wszystkie osoby korzystające ze wspólnych profili muszą zaktualizować program do wersji 3.2. Starsze wersje nie otworzą przeniesionych plików.
+
+### 3.2.1
+
+- Poprawka: przy bardzo szybkiej pracy w formularzu wpisu przycisk „Usuń konto” mógł uruchomić się sam.
