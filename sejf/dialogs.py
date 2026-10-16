@@ -187,6 +187,37 @@ class ExportDialog(Dialog):
         ttk.Button(b, text="Zamknij", command=self.close).pack(anchor="e")
 
 
+class CustomFieldDialog(Dialog):
+    """Własne pole wpisu, opcjonalnie dodawane do wszystkich nowych wpisów danego typu."""
+
+    def __init__(self, app, group: str):
+        super().__init__(app, "Własne pole")
+        self.result = None
+        b = self.body
+        ttk.Label(b, text="NAZWA POLA", style="Field.TLabel").pack(anchor="w", pady=(0, 4))
+        self.name = tk.StringVar()
+        e = ttk.Entry(b, textvariable=self.name, width=36)
+        e.pack(fill="x")
+        e.bind("<Return>", lambda ev: self.ok())
+        ttk.Label(b, text="np. Numer inwentarzowy, PIN do drukarki, Konto Google", style="Small.TLabel").pack(anchor="w", pady=(4, 0))
+        self.secret = tk.BooleanVar()
+        self.template = tk.BooleanVar()
+        ttk.Checkbutton(b, text="Wartość tajna (ukrywana jak hasło)", variable=self.secret).pack(anchor="w", pady=(12, 0))
+        ttk.Checkbutton(b, text=f"Dodawaj to pole do nowych wpisów: {group}", variable=self.template).pack(anchor="w", pady=(6, 0))
+        self.err = ttk.Label(b, style="Error.TLabel")
+        self.err.pack(anchor="w", pady=(6, 0))
+        self.buttons(("Dodaj pole", self.ok, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
+        focus_later(e, 30)
+
+    def ok(self):
+        name = self.name.get().strip()
+        if not name:
+            self.err.configure(text="Wpisz nazwę pola.")
+            return
+        self.result = (name, self.secret.get(), self.template.get())
+        self.close()
+
+
 class HistoryDialog(Dialog):
     def __init__(self, app, e):
         super().__init__(app, "Poprzednie hasła")

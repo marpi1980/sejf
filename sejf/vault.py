@@ -76,7 +76,7 @@ def new_entry(**fields) -> dict:
     t = now_iso()
     e = {
         "id": new_id(), "type": "web", "title": "", "username": "", "password": "", "url": "", "notes": "",
-        "category": "", "tags": [], "fav": False, "extra": {}, "accounts": [], "created": t, "updated": t,
+        "category": "", "tags": [], "fav": False, "extra": {}, "accounts": [], "custom": [], "created": t, "updated": t,
         "history": [],
     }
     e.update(fields)
@@ -103,8 +103,56 @@ def normalize_entry(e: dict) -> dict:
         "created": created, "updated": e.get("updated") or created,
         "history": list(e.get("history") or [])[:HISTORY_LIMIT],
         "accounts": [normalize_account(a) for a in (e.get("accounts") or []) if isinstance(a, dict)],
+        "custom": [normalize_custom(c) for c in (e.get("custom") or []) if isinstance(c, dict)],
     })
     return out
+
+
+def new_custom(label: str, secret: bool = False, value: str = "") -> dict:
+    """Własne pole wpisu, np. „Numer inwentarzowy” albo „PIN do drukarki”."""
+    return {"id": new_id(), "label": label, "value": value, "secret": bool(secret)}
+
+
+def normalize_custom(c: dict) -> dict:
+    return {**c, "id": c.get("id") or new_id(), "label": _s(c.get("label")), "value": _s(c.get("value")),
+            "secret": bool(c.get("secret"))}
+
+
+def clean_custom(fields: list[dict]) -> list[dict]:
+    return [normalize_custom(c) for c in fields if (c.get("label") or "").strip()]
+
+
+# --- widoczność pól w formularzu (ustawienie osoby, w jej osobistym sejfie) ----------------
+def hidden_fields(settings: dict, kind_key: str) -> set[str]:
+    return set((settings.get("hiddenFields") or {}).get(kind_key) or [])
+
+
+def set_field_hidden(settings: dict, kind_key: str, field_key: str, hidden: bool) -> None:
+    hf = settings.setdefault("hiddenFields", {})
+    cur = set(hf.get(kind_key) or [])
+    cur = cur | {field_key} if hidden else cur - {field_key}
+    if cur:
+        hf[kind_key] = sorted(cur)
+    else:
+        hf.pop(kind_key, None)
+
+
+def template_fields(settings: dict, kind_key: str) -> list[dict]:
+    """Własne pola dodawane automatycznie do nowych wpisów danego typu."""
+    return list((settings.get("customFields") or {}).get(kind_key) or [])
+
+
+def add_template_field(settings: dict, kind_key: str, label: str, secret: bool) -> None:
+    lst = settings.setdefault("customFields", {}).setdefault(kind_key, [])
+    if not any(t["label"].lower() == label.lower() for t in lst):
+        lst.append({"label": label, "secret": bool(secret)})
+
+
+def remove_template_field(settings: dict, kind_key: str, label: str) -> None:
+    cf = settings.setdefault("customFields", {})
+    cf[kind_key] = [t for t in cf.get(kind_key) or [] if t["label"].lower() != label.lower()]
+    if not cf[kind_key]:
+        cf.pop(kind_key)
 
 
 def new_account(**fields) -> dict:

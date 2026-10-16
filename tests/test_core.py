@@ -520,6 +520,61 @@ class KindsAndConnectTests(unittest.TestCase):
         self.assertIn("idrac_password", [f.key for f in kinds.secret_fields(kinds.BY_KEY["server"])])
         self.assertEqual(len(vault.filter_entries({"entries": [vault.normalize_entry(e)]}, query="calvin")), 0)
 
+    def test_computer(self):
+        k = kinds.BY_KEY["computer"]
+        self.assertEqual((k.login_label, k.password_label), ("Login do Windows", "Hasło do Windows"))
+        e = vault.normalize_entry(vault.new_entry(type="computer", title="Anna Nowak – laptop", username="anowak",
+            extra={"person": "Anna Nowak", "hostname": "KSIEGOWOSC-01", "remote_tool": "AnyDesk",
+                   "remote_id": "123 456 789", "remote_password": "Rd!1", "drive": r"Z: = \\srv01\dane",
+                   "drive_password": "Dysk!1", "bitlocker": "111111-222222"}))
+        a = connect.plan(e)
+        self.assertEqual((a.target, a.copy_key), ("anydesk:123456789", "remote_password"))
+        e["extra"]["remote_tool"] = "RustDesk"
+        self.assertEqual(connect.plan(e).target, "rustdesk://123456789")
+        e["extra"]["remote_tool"] = "TeamViewer"
+        self.assertEqual(connect.plan(e).target, "teamviewer10://control?device=123456789")
+        e["extra"]["remote_tool"] = "Pulpit zdalny (RDP)"
+        self.assertEqual(connect.plan(e).target, ["mstsc", "/v:KSIEGOWOSC-01"])
+        e["extra"]["remote_tool"], e["extra"]["remote_id"] = "AnyDesk", "12 & calc"
+        self.assertIsNone(connect.plan(e))
+        sh = connect.share_action(e)
+        self.assertEqual((sh.target, sh.copy_key), (r"\\srv01\dane", "drive_password"))
+        self.assertEqual(connect.ping_action(e).target[-1], "KSIEGOWOSC-01")
+        self.assertEqual(kinds.address_of(e), "KSIEGOWOSC-01")
+        v = {"entries": [e]}
+        self.assertEqual(len(vault.filter_entries(v, query="anna ksiegowosc")), 1)
+        self.assertEqual(len(vault.filter_entries(v, query="111111")), 0)  # klucz BitLocker jest tajny
+        r = csvio.parse("Typ;Imię i nazwisko;Nazwa komputera;IP\nLaptop;Jan Kowalski;BIURO-02;10.0.0.31\n")
+        self.assertEqual(r.entries[0]["type"], "computer")
+        self.assertEqual(r.entries[0]["extra"]["person"], "Jan Kowalski")
+        self.assertEqual(r.entries[0]["extra"]["hostname"], "BIURO-02")
+
+    def test_hidden_and_custom_fields(self):
+        st = vault.default_settings()
+        vault.set_field_hidden(st, "computer", "bitlocker", True)
+        vault.set_field_hidden(st, "computer", "pin", True)
+        self.assertEqual(vault.hidden_fields(st, "computer"), {"bitlocker", "pin"})
+        vault.set_field_hidden(st, "computer", "pin", False)
+        self.assertEqual(vault.hidden_fields(st, "computer"), {"bitlocker"})
+        vault.set_field_hidden(st, "computer", "bitlocker", False)
+        self.assertNotIn("computer", st.get("hiddenFields", {}))
+        vault.add_template_field(st, "computer", "Numer inwentarzowy", False)
+        vault.add_template_field(st, "computer", "numer inwentarzowy", True)
+        self.assertEqual(len(vault.template_fields(st, "computer")), 1)
+        vault.remove_template_field(st, "computer", "Numer inwentarzowy")
+        self.assertEqual(vault.template_fields(st, "computer"), [])
+        e = vault.normalize_entry(vault.new_entry(type="computer", custom=[
+            vault.new_custom("Numer inwentarzowy", value="INW/2026/014"), vault.new_custom("PIN drukarki", True, "4321"),
+            {"label": "", "value": "x"}]))
+        e["custom"] = vault.clean_custom(e["custom"])
+        self.assertEqual(len(e["custom"]), 2)
+        v = {"entries": [e]}
+        self.assertEqual(len(vault.filter_entries(v, query="INW/2026")), 1)
+        self.assertEqual(len(vault.filter_entries(v, query="4321")), 0)
+        back = csvio.parse(csvio.to_csv([e])).entries[0]
+        self.assertEqual([(c["label"], c["secret"]) for c in back["custom"]],
+                         [("Numer inwentarzowy", False), ("PIN drukarki", True)])
+
     def test_expiry(self):
         from datetime import date
         lic = vault.new_entry(type="license", extra={"valid_until": "2026-11-01"})

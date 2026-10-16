@@ -176,6 +176,40 @@ class GuiFlow(unittest.TestCase):
                        enable="En4ble!", snmp="acme-ro", model="HPE Aruba 2930F", vlans="10 biuro, 20 VoIP, 99 mgmt",
                        location="Szafa RACK 1, U40")
         main.detail.save()
+        # komputer użytkownika: ukrycie zbędnego pola, przywrócenie, własne pole jako szablon
+        main.new_entry()
+        self.form_fill(type_label=BY_KEY["computer"].label)
+        det = main.detail
+        self.form_fill(title="Anna Nowak – laptop", person="Anna Nowak", department="Księgowość",
+                       hostname="KSIEGOWOSC-01", host="10.10.0.31", username="anowak", password="Win!2026-an",
+                       email="anna.nowak@acme.pl", email_password="Mail!2026", drive="Z: = \\\\srv01\\ksiegowosc",
+                       drive_user="ACME\\anowak", drive_password="Dysk!2026", remote_tool="AnyDesk",
+                       remote_id="123 456 789", remote_password="Any!2026", os="Windows 11 Pro", warranty="2027-03-31")
+        pin = BY_KEY["computer"].fields[[f.key for f in BY_KEY["computer"].fields].index("pin")]
+        det._hide_field(pin)
+        self.assertNotIn("pin", det.vars)
+        self.assertIn("pin", vault.hidden_fields(app.s.data["settings"], "computer"))
+        det.add_custom("Numer inwentarzowy", False, template=True)
+        det.custom_vars[-1].set("INW/2026/014")
+        self.assertEqual(det.vars["person"].get(), "Anna Nowak")  # wartości przetrwały przebudowę formularza
+        self.pump()
+        shot(self.root, "04c-formularz-komputer")
+        det.save()
+        self.pump()
+        pc = next(e for e in app.s.profiles[next(iter(app.s.profiles))].data["entries"] if e["type"] == "computer")
+        self.assertEqual(pc["extra"]["hostname"], "KSIEGOWOSC-01")
+        self.assertEqual(pc["custom"][0]["value"], "INW/2026/014")
+        self.pump(0.3)
+        shot(self.root, "07c-komputer")
+        # następny komputer dostaje pole z szablonu, a ukryte pole można przywrócić
+        main.new_entry()
+        self.form_fill(type_label=BY_KEY["computer"].label)
+        self.assertEqual([c["label"] for c in main.detail.editing["custom"]], ["Numer inwentarzowy"])
+        main.detail.show_field("pin")
+        self.assertIn("pin", main.detail.vars)
+        main.detail.cancel()
+        self.pump()
+
         main.new_entry()
         self.form_fill(type_label=BY_KEY["vpn"].label)
         self.form_fill(title="VPN dla serwisu", host="vpn.acme.pl", vpn_type="WireGuard", username="serwis",
@@ -183,7 +217,7 @@ class GuiFlow(unittest.TestCase):
         main.detail.save()
         self.pump()
         entries = app.s.profiles[pid].data["entries"]
-        self.assertEqual(sorted(e["type"] for e in entries), ["server", "switch", "vpn"])
+        self.assertEqual(sorted(e["type"] for e in entries), ["computer", "server", "switch", "vpn"])
         sw = next(e for e in entries if e["type"] == "switch")
         self.assertEqual(sw["extra"]["enable"], "En4ble!")
         self.assertEqual(sw["extra"]["protocol"], "SSH")
@@ -200,7 +234,7 @@ class GuiFlow(unittest.TestCase):
         shot(imp, "05-import-urzadzen")
         imp.go()
         self.pump(0.3)
-        self.assertEqual(len(app.s.profiles[pid].data["entries"]), 6)
+        self.assertEqual(len(app.s.profiles[pid].data["entries"]), 7)
         self.saved()
 
         # karta klienta i szczegóły serwera

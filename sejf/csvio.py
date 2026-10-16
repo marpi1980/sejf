@@ -23,9 +23,12 @@ COLUMNS = {
     "type": ["type", "typ", "rodzaj", "rodzaj urządzenia", "typ urządzenia", "urządzenie"],
     "extra": ["extra", "dodatkowe"],
     "accounts": ["accounts", "konta"],
+    "custom": ["custom", "własne pola"],
 }
 # kolumny z arkuszy inwentaryzacji IT → pola urządzeń
 EXTRA_COLUMNS = {
+    "hostname": ["nazwa komputera", "computer name", "komputer"],
+    "person": ["imię i nazwisko", "imie i nazwisko", "pracownik", "osoba"],
     "host": ["host", "hostname", "ip", "adres ip", "ip address", "ip adres", "adres urządzenia", "nazwa hosta"],
     "port": ["port"],
     "protocol": ["protocol", "protokół", "protokol"],
@@ -54,7 +57,8 @@ def kind_from_text(text: str) -> str | None:
                "drukarka": "printer", "printer": "printer", "wifi": "wifi", "wi-fi": "wifi", "ap": "ap",
                "kamera": "camera", "nvr": "camera", "ups": "ups", "baza": "database", "vpn": "vpn", "serwer": "server",
                "server": "server", "licencja": "license", "konto": "account", "poczta": "email", "e-mail": "email",
-               "strona": "web", "www": "web"}
+               "strona": "web", "www": "web", "komputer": "computer", "laptop": "computer", "pc": "computer",
+               "stanowisko": "computer", "notebook": "computer"}
     for word, key in aliases.items():
         if word in t.split() or t.startswith(word):
             return key
@@ -140,11 +144,19 @@ def parse(text: str) -> ImportResult:
             except ValueError:
                 accounts = []
         e["accounts"] = accounts
+        custom = []
+        raw_custom = get(r, "custom")
+        if raw_custom.startswith("["):
+            try:
+                custom = [c for c in json.loads(raw_custom) if isinstance(c, dict)]
+            except ValueError:
+                custom = []
+        e["custom"] = custom
         typ = kind_from_text(get(r, "type"))
         if not typ:
             typ = "device" if extra.get("host") and not e["url"] else "web"
         e["type"], e["extra"] = typ, extra
-        if not (e["password"] or e["username"] or e["notes"] or extra):
+        if not (e["password"] or e["username"] or e["notes"] or extra or accounts or custom):
             continue
         parts = [p for p in e["category"].replace("\\", "/").split("/") if p]
         if parts and parts[0].lower() == "root":
@@ -171,12 +183,14 @@ def to_csv(entries: list[dict]) -> str:
     buf = io.StringIO(newline="")
     w = csv.writer(buf, lineterminator="\r\n")
     w.writerow(["name", "url", "username", "password", "note", "category", "tags", "favorite", "type", "host", "extra",
-                "accounts"])
+                "accounts", "custom"])
     for e in entries:
         ex = e.get("extra") or {}
         w.writerow([e["title"], e["url"], e["username"], e["password"], e["notes"], e["category"],
                     ", ".join(e["tags"]), "1" if e["fav"] else "", e.get("type", "web"), ex.get("host", ""),
                     json.dumps(ex, ensure_ascii=False) if ex else "",
                     json.dumps([{k: a.get(k, "") for k in ("label", "username", "password")} for a in e.get("accounts") or []],
-                               ensure_ascii=False) if e.get("accounts") else ""])
+                               ensure_ascii=False) if e.get("accounts") else "",
+                    json.dumps([{k: c.get(k, "") for k in ("label", "value", "secret")} for c in e.get("custom") or []],
+                               ensure_ascii=False) if e.get("custom") else ""])
     return "﻿" + buf.getvalue()

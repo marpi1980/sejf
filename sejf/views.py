@@ -768,8 +768,8 @@ class DetailPanel(ttk.Frame):
         if con:
             ttk.Button(acts, text=con.label, command=lambda: app.connect(e, con)).pack(side="left", padx=(0, 6))
         sh = connect.share_action(e)
-        if sh and connect.available() and not (act and act.kind == "open"):
-            ttk.Button(acts, text="Otwórz udział", command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
+        if sh and connect.available() and not (act and act.target == sh.target):
+            ttk.Button(acts, text=sh.label, command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
         if connect.ping_action(e) and connect.available():
             ttk.Button(acts, text="Ping", command=lambda: app.connect(e, connect.ping_action(e))).pack(side="left", padx=(0, 6))
         ttk.Button(acts, text="Edytuj", command=lambda: self.edit(sid, e)).pack(side="left", padx=(0, 6))
@@ -813,9 +813,9 @@ class DetailPanel(ttk.Frame):
             ttk.Label(grid, text="Konto główne", style="Strong.TLabel").grid(row=row[0], column=0, columnspan=3, sticky="w")
             row[0] += 1
         if k.uses_login or e["username"]:
-            field("Login", e["username"], copy_what="login")
+            field(k.login_label, e["username"], copy_what="login")
         if k.uses_login or e["password"]:
-            field("Hasło" if k.key != "wifi" else "Hasło Wi-Fi", e["password"], secret=True, copy_what="hasło")
+            field(k.password_label if k.key != "wifi" else "Hasło Wi-Fi", e["password"], secret=True, copy_what="hasło")
             if e["password"]:
                 meter = StrengthBar(grid, app)
                 meter.set(e["password"])
@@ -843,6 +843,9 @@ class DetailPanel(ttk.Frame):
             if not v:
                 continue
             field(f.label, v, secret=f.kind == "secret")
+        for c in e.get("custom") or []:
+            if c.get("value"):
+                field(c["label"], c["value"], secret=c.get("secret", False), copy_what=c["label"].lower())
         if k.uses_url or e["url"]:
             if e["url"]:
                 field("Adres WWW", e["url"], copy_what="adres", link=vault.safe_href(e["url"]))
@@ -888,7 +891,10 @@ class DetailPanel(ttk.Frame):
                                    "tags": ", ".join(src["tags"]), "notes": src["notes"], "fav": src["fav"],
                                    "target": dict(targets).get(sid, "Moje hasła"), **(src.get("extra") or {})},
                         "accounts": [dict(a) for a in src.get("accounts") or []],
+                        "custom": [dict(c) for c in src.get("custom") or []],
                         "show_pw": False}
+        if e is None:  # nowy wpis dostaje własne pola zapisane jako szablon typu
+            self._apply_templates()
         self._render_form()
 
     def _collect(self):
@@ -901,6 +907,8 @@ class DetailPanel(ttk.Frame):
         for a, row in zip(ed["accounts"], self.acc_vars):
             for key, var in row.items():
                 a[key] = var.get()
+        for c, var in zip(ed["custom"], self.custom_vars):
+            c["value"] = var.get()
 
     def type_key(self) -> str:
         label = self.vars["type_label"].get()
@@ -920,6 +928,8 @@ class DetailPanel(ttk.Frame):
         g.columnconfigure(1, weight=1, uniform="c")
         self.vars = {}
         self.acc_vars = []
+        self.custom_vars = []
+        settings = app.s.data["settings"]
         r = [0]
 
         def var(key, value="", cls=tk.StringVar):
@@ -955,8 +965,8 @@ class DetailPanel(ttk.Frame):
         self.secret_entries = []
         has_toggle = k.key != "wifi" and (k.uses_login or bool(val.get("username")) or bool(val.get("password")))
         if k.key != "wifi" and (k.uses_login or val.get("username") or val.get("password")):
-            lab("Login" if k.key not in ("email",) else "Adres e-mail / login", 0)
-            lab("Hasło", 1)
+            lab(k.login_label if k.key not in ("email",) else "Adres e-mail / login", 0)
+            lab(k.password_label, 1)
             put(ttk.Entry(g, textvariable=var("username")), 0)
             pr = ttk.Frame(g)
             put(pr, 1)
@@ -1011,10 +1021,22 @@ class DetailPanel(ttk.Frame):
             lab("Hasło Wi-Fi", 0, 2)
             put(ttk.Entry(g, textvariable=var("password"), font=app.mono), 0, 2)
             next_row()
-        # pola typu, po dwa w wierszu
+        # pola typu, po dwa w wierszu; pola ukryte przez użytkownika pomijamy, chyba że mają wartość
+        hidden = vault.hidden_fields(settings, k.key)
+        shown = [f for f in k.fields if f.key not in hidden or val.get(f.key)]
+        self.hidden_now = [f for f in k.fields if f not in shown]
+
+        def labx(text, column, on_remove, tip="Usuń to pole z formularza"):
+            cell = ttk.Frame(g)
+            cell.grid(row=r[0], column=column, sticky="ew", pady=(10, 3), padx=(0 if column == 0 else 10, 0))
+            ttk.Label(cell, text=text.upper(), style="Field.TLabel").pack(side="left")
+            x = ttk.Label(cell, text="✕", style="Small.TLabel", cursor="hand2")
+            x.pack(side="right")
+            x.bind("<Button-1>", lambda ev: on_remove())
+
         col = 0
-        for f in k.fields:
-            lab(f.label + ("" if f.kind != "date" else " (RRRR-MM-DD)"), col)
+        for f in shown:
+            labx(f.label + ("" if f.kind != "date" else " (RRRR-MM-DD)"), col, lambda f=f: self._hide_field(f))
             v = var(f.key)
             if f.kind == "choice":
                 w = ttk.Combobox(g, textvariable=v, values=list(f.choices))
@@ -1031,6 +1053,29 @@ class DetailPanel(ttk.Frame):
             col = 1 - col
         if col == 1:
             next_row()
+        # własne pola
+        for i, c in enumerate(ed["custom"]):
+            col = i % 2
+            labx(c["label"] + (" (ukryte)" if c.get("secret") else ""), col, lambda i=i: self._remove_custom(i),
+                 "Usuń to pole z tego wpisu")
+            cv = tk.StringVar(value=c.get("value", ""))
+            self.custom_vars.append(cv)
+            w = ttk.Entry(g, textvariable=cv, font=app.mono,
+                          show="•" if c.get("secret") and has_toggle and not ed["show_pw"] else "")
+            if c.get("secret"):
+                self.secret_entries.append(w)
+            put(w, col)
+            if col == 1:
+                next_row()
+        if len(ed["custom"]) % 2 == 1:
+            next_row()
+        addrow = ttk.Frame(g)
+        addrow.grid(row=r[0], column=0, columnspan=2, sticky="w", pady=(10, 0))
+        self.add_field_btn = ttk.Button(addrow, text="＋ Dodaj pole ▾", command=self._add_field_menu)
+        self.add_field_btn.pack(side="left")
+        if self.hidden_now:
+            ttk.Label(addrow, text=f"Ukryte pola tego typu: {len(self.hidden_now)}", style="Small.TLabel").pack(side="left", padx=(10, 0))
+        r[0] += 1
         if k.uses_url or val.get("url"):
             lab("Adres WWW / panel logowania", 0, 2)
             put(ttk.Entry(g, textvariable=var("url")), 0, 2)
@@ -1077,6 +1122,9 @@ class DetailPanel(ttk.Frame):
         val = self.editing["values"]
         if val.get("protocol", "") in ("", before.protocol):  # domyślny protokół podąża za typem
             val["protocol"] = after.protocol
+        if not self.editing["id"]:
+            self.editing["custom"] = [c for c in self.editing["custom"] if c.get("value")]
+            self._apply_templates()
         self._render_form()
 
     def _use_generated(self, value, account: int | None = None):
@@ -1087,6 +1135,84 @@ class DetailPanel(ttk.Frame):
             self.editing["accounts"][account]["password"] = value
         self.editing["show_pw"] = True
         self._render_form()
+
+    def _apply_templates(self):
+        ed = self.editing
+        have = {c["label"].lower() for c in ed["custom"]}
+        for t in vault.template_fields(self.app.s.data["settings"], ed["values"]["type"]):
+            if t["label"].lower() not in have:
+                ed["custom"].append(vault.new_custom(t["label"], t.get("secret", False)))
+
+    def _hide_field(self, f):
+        """Usuwa pole z formularza tego typu (u tej osoby). Wraca przez „＋ Dodaj pole”."""
+        self._collect()
+        val = self.editing["values"]
+        if val.get(f.key):
+            if not messagebox.askyesno("Usuń pole", f"Pole „{f.label}” ma wartość. Usunąć ją z tego wpisu i ukryć pole?",
+                                       parent=self.app.root):
+                return
+            val[f.key] = ""
+        vault.set_field_hidden(self.app.s.data["settings"], val["type"], f.key, True)
+        self.app.changed(ME)
+        self._render_form()
+        self.app.flash(f"Ukryto pole „{f.label}”. Przywrócisz je przyciskiem „＋ Dodaj pole”.")
+
+    def show_field(self, key):
+        self._collect()
+        vault.set_field_hidden(self.app.s.data["settings"], self.editing["values"]["type"], key, False)
+        self.app.changed(ME)
+        self._render_form()
+
+    def restore_fields(self):
+        self._collect()
+        self.app.s.data["settings"].get("hiddenFields", {}).pop(self.editing["values"]["type"], None)
+        self.app.changed(ME)
+        self._render_form()
+
+    def add_custom(self, label: str, secret: bool = False, template: bool = False):
+        self._collect()
+        ed = self.editing
+        ed["custom"].append(vault.new_custom(label, secret))
+        if template:
+            vault.add_template_field(self.app.s.data["settings"], ed["values"]["type"], label, secret)
+            self.app.changed(ME)
+        self._render_form()
+
+    def _remove_custom(self, i):
+        self._collect()
+        c = self.editing["custom"][i]
+        if c.get("value") and not messagebox.askyesno("Usuń pole", f"Usunąć pole „{c['label']}” razem z wartością?",
+                                                        parent=self.app.root):
+            return
+        del self.editing["custom"][i]
+        settings = self.app.s.data["settings"]
+        kind = self.editing["values"]["type"]
+        if any(t["label"].lower() == c["label"].lower() for t in vault.template_fields(settings, kind)):
+            if messagebox.askyesno("Usuń pole", f"Przestać dodawać pole „{c['label']}” do nowych wpisów tego typu?",
+                                   parent=self.app.root):
+                vault.remove_template_field(settings, kind, c["label"])
+                self.app.changed(ME)
+        self._render_form()
+
+    def _add_field_menu(self):
+        m = tk.Menu(self, tearoff=False)
+        for f in self.hidden_now:
+            m.add_command(label=f.label, command=lambda f=f: self.show_field(f.key))
+        if self.hidden_now:
+            m.add_separator()
+            m.add_command(label="Przywróć wszystkie pola tego typu", command=self.restore_fields)
+            m.add_separator()
+        m.add_command(label="Własne pole…", command=self._custom_dialog)
+        b = self.add_field_btn
+        m.tk_popup(b.winfo_rootx(), b.winfo_rooty() + b.winfo_height())
+
+    def _custom_dialog(self):
+        from .dialogs import CustomFieldDialog
+        k = BY_KEY.get(self.type_key(), BY_KEY["web"])
+        d = CustomFieldDialog(self.app, k.group.lower()).show()
+        self.app.root.wait_window(d)
+        if d.result:
+            self.add_custom(*d.result)
 
     def _add_account(self):
         self._collect()
@@ -1119,7 +1245,8 @@ class DetailPanel(ttk.Frame):
                   "password": val.get("password", ""), "url": val.get("url", "").strip(),
                   "category": val["category"].strip(), "tags": vault.parse_tags(val["tags"]), "notes": val["notes"],
                   "fav": bool(val["fav"]), "extra": extra,
-                  "accounts": vault.clean_accounts(ed["accounts"])}
+                  "accounts": vault.clean_accounts(ed["accounts"]),
+                  "custom": vault.clean_custom(ed["custom"])}
         if old:
             vault.update_entry(old, fields)
             e = old

@@ -42,6 +42,8 @@ class Kind:
     protocol: str = ""        # domyślny protokół połączenia
     uses_url: bool = False    # czy pokazywać pole „Adres WWW”
     uses_login: bool = True
+    login_label: str = "Login"
+    password_label: str = "Hasło"
     extra_defaults: dict = field(default_factory=dict)
 
 
@@ -56,6 +58,30 @@ KINDS: tuple[Kind, ...] = (
           Field("idrac", "Konsola zarządzania (iDRAC / iLO / IPMI)", hint="adres, np. https://10.10.0.110"),
           Field("idrac_user", "Użytkownik konsoli"), Field("idrac_password", "Hasło konsoli", "secret"),
           MODEL, SERIAL, LOCATION), protocol="RDP"),
+    Kind("computer", "Komputer / stanowisko", "Komputery",
+         (Field("person", "Użytkownik (imię i nazwisko)", mono=False),
+          Field("department", "Dział", mono=False),
+          Field("hostname", "Nazwa komputera w Windows", hint="np. KSIEGOWOSC-01"),
+          Field("host", "Adres IP"),
+          Field("domain", "Domena / grupa robocza"),
+          Field("os", "System", "choice", ("Windows 11 Pro", "Windows 11 Home", "Windows 10 Pro", "Windows 10 Home",
+                                            "macOS", "Linux", "inny"), mono=False),
+          Field("email", "Adres e-mail"), Field("email_password", "Hasło do poczty", "secret"),
+          Field("drive", "Dysk sieciowy", hint=r"np. Z: = \\srv01\dane"),
+          Field("drive_user", "Login do dysku"), Field("drive_password", "Hasło do dysku", "secret"),
+          Field("remote_tool", "Program do zdalnej pomocy", "choice",
+                ("RustDesk", "AnyDesk", "TeamViewer", "Pulpit zdalny (RDP)", "Chrome Remote Desktop", "Quick Assist",
+                 "VNC", "inny"), mono=False),
+          Field("remote_id", "ID zdalnej pomocy", hint="np. 123 456 789"),
+          Field("remote_password", "Hasło zdalnej pomocy", "secret"),
+          Field("pin", "PIN do Windows Hello", "secret"),
+          Field("bitlocker", "Klucz odzyskiwania BitLocker", "secret"),
+          Field("office", "Pakiet Office / licencja", mono=False),
+          Field("antivirus", "Antywirus", mono=False),
+          Field("model", "Producent i model", mono=False), Field("serial", "Numer seryjny"), Field("mac", "Adres MAC"),
+          Field("location", "Lokalizacja / pokój", mono=False),
+          Field("warranty", "Gwarancja do", "date")),
+         login_label="Login do Windows", password_label="Hasło do Windows"),
     Kind("switch", "Przełącznik (switch)", "Przełączniki",
          (*DEVICE, Field("enable", "Hasło enable", "secret"),
           Field("snmp", "SNMP community", "secret"), Field("vlans", "VLAN-y", hint="np. 10 biuro, 20 VoIP, 99 zarządzanie")),
@@ -125,7 +151,7 @@ def secret_fields(kind: Kind) -> list[Field]:
 def address_of(entry: dict) -> str:
     """Adres do wyświetlenia na liście: host z portem albo adres strony."""
     ex = entry.get("extra") or {}
-    host = (ex.get("host") or "").strip()
+    host = (ex.get("host") or ex.get("hostname") or "").strip()
     if host:
         port = (ex.get("port") or "").strip()
         return f"{host}:{port}" if port else host
@@ -142,6 +168,10 @@ def searchable(entry: dict) -> str:
     parts = [entry.get("title", ""), entry.get("username", ""), entry.get("url", ""), entry.get("notes", ""),
              entry.get("category", ""), " ".join(entry.get("tags") or []), k.label, k.group]
     parts += [str(v) for key, v in ex.items() if key not in secret and v]
+    for c in entry.get("custom") or []:
+        parts.append(c.get("label", ""))
+        if not c.get("secret"):
+            parts.append(c.get("value", ""))
     for a in entry.get("accounts") or []:
         parts += [a.get("label", ""), a.get("username", "")]
     return " ".join(parts)
