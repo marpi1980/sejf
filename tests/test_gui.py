@@ -375,7 +375,7 @@ class GuiFlow(unittest.TestCase):
         self.wait(lambda: pid in app.s.profiles and app.s.profiles[pid].file is not None, msg="ponowne dodanie profilu")
 
         # --- dziennik zmian ---------------------------------------------------------------------
-        bank = next(e for e in app.s.profiles[pid].data["entries"] if e["title"] == "Bank PKO")
+        bank = next(e for e in app.s.profiles[pid].data["entries"] if e["title"] == "NAS01")
         app.copy(bank["password"], "hasło", secret=True, log=(pid, bank))
         self.saved()
         actions = [x["action"] for x in app.s.profiles[pid].data["log"]]
