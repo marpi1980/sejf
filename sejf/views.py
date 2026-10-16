@@ -754,11 +754,17 @@ class DetailPanel(ttk.Frame):
         head.pack(fill="x", pady=(10, 0))
         txt = ttk.Frame(head)
         txt.pack(side="left", fill="x", expand=True)
-        ttk.Label(txt, text=e["title"], style="Title.TLabel", wraplength=app.px(400)).pack(anchor="w")
+        ttk.Label(txt, text=e["title"], style="Title.TLabel", wraplength=app.px(300)).pack(anchor="w")
         sub = k.label + ("" if sid == ME else f"  ·  {app.s.source_name(sid)}")
         if e["category"]:
             sub += f"  ·  {e['category']}"
-        ttk.Label(txt, text=sub, style="Muted.TLabel", wraplength=app.px(400)).pack(anchor="w")
+        ttk.Label(txt, text=sub, style="Muted.TLabel", wraplength=app.px(300)).pack(anchor="w")
+        manage = ttk.Frame(head)
+        manage.pack(side="right", anchor="n")
+        ttk.Button(manage, text="Edytuj", command=lambda: self.edit(sid, e)).pack(side="left")
+        ttk.Button(manage, text="★" if e["fav"] else "☆", width=3,
+                   command=lambda: self.main.toggle_fav(sid, e)).pack(side="left", padx=(6, 0))
+        ttk.Button(manage, text="Usuń…", command=lambda: self.main.delete(sid, e)).pack(side="left", padx=(6, 0))
         acts = ttk.Frame(self.body)
         acts.pack(fill="x", pady=(12, 0))
         act = connect.plan(e)
@@ -772,10 +778,6 @@ class DetailPanel(ttk.Frame):
             ttk.Button(acts, text=sh.label, command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
         if connect.ping_action(e) and connect.available():
             ttk.Button(acts, text="Ping", command=lambda: app.connect(e, connect.ping_action(e))).pack(side="left", padx=(0, 6))
-        ttk.Button(acts, text="Edytuj", command=lambda: self.edit(sid, e)).pack(side="left", padx=(0, 6))
-        ttk.Button(acts, text="★" if e["fav"] else "☆", width=3,
-                   command=lambda: self.main.toggle_fav(sid, e)).pack(side="left", padx=(0, 6))
-        ttk.Button(acts, text="Usuń…", command=lambda: self.main.delete(sid, e)).pack(side="left")
 
         state = vault.expiry_state(e)
         if state:

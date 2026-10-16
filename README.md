@@ -35,7 +35,8 @@ Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochron
 
 | Typ | Pola dodatkowe |
 |---|---|
-| Serwer | adres IP, protokół (RDP, SSH…), port, system, domena, rola, konsola iDRAC / iLO, model, numer seryjny, lokalizacja |
+| Komputer / stanowisko | użytkownik (imię i nazwisko), dział, nazwa komputera, IP, domena, logowanie do Windows, e-mail i hasło do poczty, dysk sieciowy z loginem i hasłem, program do zdalnej pomocy (RustDesk, AnyDesk, TeamViewer, RDP…) z ID i hasłem, PIN Windows Hello, klucz BitLocker, Office, antywirus, model, numer seryjny, MAC, pokój, gwarancja |
+| Serwer | adres IP, protokół (RDP, SSH…), port, system, domena, rola, konsola iDRAC / iLO / IPMI z użytkownikiem i hasłem, model, numer seryjny, lokalizacja |
 | Przełącznik (switch) | adres, protokół, port, model, numer seryjny, MAC, lokalizacja, firmware, hasło enable, SNMP community, VLAN-y |
 | Router / firewall | jak wyżej oraz adres publiczny WAN i dostawca internetu |
 | Dysk sieciowy (NAS) | jak wyżej oraz udział sieciowy `\\nas\udział` |
@@ -47,9 +48,15 @@ Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochron
 | Licencja / klucz produktu | produkt, klucz, liczba stanowisk, data ważności (z ostrzeżeniem przed wygaśnięciem) |
 | Strona / konto internetowe, notatka | |
 
-Pola tajne (hasło enable, SNMP, PSK, klucze licencyjne) są ukryte i kopiowane tak samo bezpiecznie jak hasła.
+Pola tajne (hasło enable, SNMP, PSK, klucze licencyjne, BitLocker) są ukryte i kopiowane tak samo bezpiecznie jak hasła.
 
-**Połączenie jednym kliknięciem**: przycisk **Pulpit zdalny (RDP)**, **Terminal SSH**, **Otwórz w przeglądarce** albo **Otwórz udział sieciowy**, zależnie od protokołu. Hasło trafia wtedy do schowka, wystarczy je wkleić. Przycisk **Ping** otwiera `ping -t` do urządzenia.
+**Pola dopasujesz do siebie:**
+
+- **Zbędne pole usuniesz** z formularza danego typu krzyżykiem ✕ przy jego nazwie. Wróci przez **＋ Dodaj pole**, tam jest też „Przywróć wszystkie pola tego typu”. Ustawienie jest Twoje (zapisuje się w osobistym sejfie) i nie zmienia formularzy współpracowników.
+- **Własne pole**, np. „Numer inwentarzowy”, dodasz przez **＋ Dodaj pole → Własne pole…**. Może być tajne i może się dodawać do każdego nowego wpisu tego typu.
+- **Kilka kont na jednym urządzeniu**: przycisk **＋ Dodaj kolejne konto** dodaje do serwera czy komputera kolejne konto z opisem, loginem i hasłem, np. lokalnego administratora, konto serwisowe albo konto kopii zapasowych.
+
+**Połączenie jednym kliknięciem**: przycisk **Pulpit zdalny (RDP)**, **Terminal SSH**, **Otwórz w przeglądarce**, **Konsola zarządzania** (iDRAC / iLO), **Połącz przez RustDesk / AnyDesk / TeamViewer**, **Otwórz dysk** albo **Otwórz udział**, zależnie od wpisu. Właściwe hasło trafia wtedy do schowka, wystarczy je wkleić. Przycisk **Ping** otwiera `ping -t` do urządzenia.
 
 <p>
 <img src="docs/zrzut-switch.png" alt="Przełącznik z hasłem enable i SNMP" width="420">

@@ -5,13 +5,12 @@
 
 Przy pierwszym uruchomieniu Windows może pokazać okno „System Windows ochronił ten komputer”, bo program nie ma płatnego podpisu cyfrowego. Kliknij **Więcej informacji → Uruchom mimo to**.
 
-## Nowości w 3.0
+## Nowości w 3.1
 
-- **Profile klientów**: osobne zaszyfrowane pliki `.sejfklient` z własnym hasłem, do przekazania współpracownikom albo do wspólnego folderu zespołu. Hasło profilu wpisujesz raz, potem otwiera się sam.
-- **Typy wpisów dla IT**: serwer, switch, router/firewall, NAS, VPN, drukarka, Wi-Fi, kamera, UPS, baza danych, konta, licencje i inne, każdy z własnymi polami.
-- **Połączenie jednym kliknięciem** (RDP, SSH, przeglądarka, udział sieciowy) i ping.
-- **Wspólna praca**: zmiany kilku osób w tym samym pliku są łączone automatycznie.
-- **Weryfikacja dwuetapowa** kodem z Google Authenticator, okresowo i na każdym nowym komputerze, z kodami zapasowymi.
-- **Import list urządzeń** z arkuszy CSV.
+- **Komputer / stanowisko**: nowy typ wpisu z danymi użytkownika, nazwą komputera, logowaniem do Windows, pocztą, dyskiem sieciowym, zdalną pomocą (RustDesk, AnyDesk, TeamViewer, RDP), kluczem BitLocker, licencjami i gwarancją.
+- **Kilka kont na jednym urządzeniu**: przycisk „＋ Dodaj kolejne konto” (np. lokalny administrator, konto serwisowe, konto kopii zapasowych).
+- **Konsola zarządzania serwera** (iDRAC / iLO / IPMI) z użytkownikiem i hasłem oraz przyciskiem otwierającym konsolę.
+- **Dopasowanie formularzy**: zbędne pola usuwasz krzyżykiem ✕ i przywracasz przez „＋ Dodaj pole”. Możesz też dodawać własne pola, także jako stały element nowych wpisów danego typu.
+- Poprawka: zapis wpisu nie zamyka już jego podglądu.
 
-Pliki sejfu z wersji 2 otwierają się bez zmian.
+Pliki sejfu i profile z wersji 3.0 otwierają się bez zmian.
