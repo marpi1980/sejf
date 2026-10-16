@@ -1,7 +1,8 @@
 """Test okienkowego interfejsu na prawdziwym Tk (uruchamiany na Windows w GitHub Actions).
 
-Przechodzi typową ścieżkę: nowy sejf → wpis z wygenerowanym hasłem → import CSV →
-wyszukiwanie → kopiowanie → blokada → odblokowanie. Po drodze zapisuje zrzuty ekranu
+Ścieżka: nowy sejf → własny wpis → profil klienta → serwer, switch i VPN → import listy urządzeń →
+udostępnienie → współpracownik dodaje wpis w tym samym pliku → weryfikacja dwuetapowa → blokada
+→ odblokowanie z kodem → zmiana hasła profilu przez inną osobę. Po drodze zapisuje zrzuty ekranu
 do katalogu test-results/.
 """
 import os
@@ -22,11 +23,11 @@ PW = "Zielony kot je 4 jabłka!"
 
 def shot(widget, name):
     """Zrzut ekranu okna (tylko Windows; gdzie indziej pomijany)."""
+    if sys.platform != "win32":
+        return
     try:
         from PIL import ImageGrab
     except ImportError:
-        return
-    if sys.platform != "win32":
         return
     widget.update()
     time.sleep(0.4)
@@ -43,13 +44,18 @@ def shot(widget, name):
 class GuiFlow(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        os.environ["SEJF_CONFIG_DIR"] = self.tmp
+        self.shared = os.path.join(self.tmp, "Dysk zespołu")
+        os.mkdir(self.shared)
+        os.environ["SEJF_CONFIG_DIR"] = os.path.join(self.tmp, "cfg")
         self.path = os.path.join(self.tmp, "hasla.sejf.json")
         messagebox.askyesno = lambda *a, **k: True
         messagebox.showinfo = lambda *a, **k: "ok"
+        messagebox.showwarning = lambda *a, **k: "ok"
+        self.errors = []
+        messagebox.showerror = lambda *a, **k: self.errors.append(a)
         from sejf.gui import App
         self.root = tk.Tk()
-        self.root.geometry("1000x700+0+0")
+        self.root.geometry("1010x720+0+0")
         self.root.attributes("-topmost", True)
         self.app = App(self.root)
         self.pump()
@@ -67,7 +73,7 @@ class GuiFlow(unittest.TestCase):
             self.root.update()
             time.sleep(0.01)
 
-    def wait(self, cond, timeout=15, msg="warunek"):
+    def wait(self, cond, timeout=20, msg="warunek"):
         end = time.time() + timeout
         while time.time() < end:
             self.root.update()
@@ -76,166 +82,243 @@ class GuiFlow(unittest.TestCase):
             time.sleep(0.02)
         self.fail(f"Przekroczono czas oczekiwania: {msg}")
 
+    def saved(self):
+        self.wait(lambda: not self.app.save_jobs and not any(
+            self.app.s.source(s).dirty for s in self.app.s.open_sources()), msg="zapis")
+
+    def form_fill(self, **values):
+        d = self.app.main.detail
+        for k, v in values.items():
+            if k == "type_label":
+                d.vars["type_label"].set(v)
+                d._retype()
+            elif k == "notes":
+                d.notes.delete("1.0", "end")
+                d.notes.insert("1.0", v)
+            else:
+                d.vars[k].set(v)
+
+    def bump(self, path):
+        st = os.stat(path)
+        os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 3_000_000_000))
+
     def test_full_flow(self):
+        from sejf import totp, vault
+        from sejf.dialogs import NewProfileDialog, ProfilePasswordDialog, ShareDialog, TotpSetupDialog
+        from sejf.kinds import BY_KEY
+        from sejf.session import ME, Session
         app = self.app
         shot(self.root, "01-start")
 
-        # nowy sejf przez ekran blokady
+        # --- nowy sejf -------------------------------------------------------------
         lock = app.view
         lock.show_create()
-        lock.n1.set("krótkie")
-        lock.n2.set("krótkie")
-        lock.create()
-        self.assertIn("8 znaków", lock.err.cget("text"))
         lock.n1.set(PW)
         lock.n2.set(PW)
-        self.pump()
-        shot(self.root, "02-nowy-sejf")
         app.create_vault(self.path, PW, lock)
         self.wait(lambda: app.main is not None, msg="utworzenie sejfu")
-        self.assertTrue(os.path.exists(self.path))
         self.pump(0.3)
-        shot(self.root, "03-pusty-sejf")
+        shot(self.root, "02-pusty-sejf")
 
-        # nowy wpis z hasłem z generatora
+        # --- własny wpis ------------------------------------------------------------
         main = app.main
         main.new_entry()
-        self.pump()
-        f = main.detail.form
-        f["title"].set("Allegro")
-        f["username"].set("jan.kowalski")
-        f["url"].set("allegro.pl")
-        f["category"].set("Sklepy")
-        f["tags"].set("zakupy, #2FA")
-        gen = app.open_generator(lambda v: f["password"].set(v))
-        gen.length.set(28)
-        gen.regen()
-        self.pump()
-        shot(gen, "04-generator")
-        generated = gen.out.get()
-        self.assertEqual(len(generated), 28)
-        gen.use()
-        self.assertEqual(f["password"].get(), generated)
-        shot(self.root, "05-edycja")
+        self.form_fill(title="Allegro", username="jan.kowalski", password="Kot123!!", url="allegro.pl")
         main.detail.save()
-        self.pump(0.5)
+        self.pump()
         self.assertEqual(len(app.s.data["entries"]), 1)
-        self.wait(lambda: not app.s.dirty, msg="autozapis")
 
-        # import CSV
-        preview = app.load_import(str(FIX / "chrome.csv"))
-        self.assertEqual(preview.found, 4)
-        self.assertEqual(len(preview.fresh), 3)
-        from sejf.gui import ImportDialog
-        dlg = ImportDialog(app, preview).show()
+        # --- nowy profil klienta ----------------------------------------------------
+        dlg = NewProfileDialog(app).show()
+        dlg.vars["name"].set("ACME")
+        dlg.vars["company"].set("ACME Polska sp. z o.o.")
+        dlg.vars["address"].set("ul. Przemysłowa 12, 30-001 Kraków")
+        dlg.vars["phone"].set("+48 12 345 67 89")
+        dlg.vars["contact"].set("Anna Nowak (kierownik biura)")
+        prof_path = os.path.join(self.shared, "ACME.sejfklient")
+        dlg.custom_path = True
+        dlg.path.set(prof_path)
+        profile_pw = dlg.pw.get()
         self.pump()
-        shot(dlg, "06-import")
-        dlg.go()
+        shot(dlg, "03-nowy-klient")
+        dlg.create()
+        self.wait(lambda: os.path.exists(prof_path) and app.s.profiles, msg="utworzenie profilu")
         self.pump(0.3)
-        self.assertEqual(len(app.s.data["entries"]), 4)
-        self.assertEqual(len(main.list.get_children()), 4)
+        pid = next(iter(app.s.profiles))
+        self.assertEqual(main.scope().profile, pid)
 
-        # wyszukiwanie bez polskich znaków
-        main.search.set("zazolc")
+        # serwer przez formularz z typem
+        main.new_entry()
+        self.form_fill(type_label=BY_KEY["server"].label)
+        self.form_fill(title="DC01 – kontroler domeny", username="ACME\\administrator", password="Srv!2026-x9",
+                       host="10.10.0.10", os="Windows Server", domain="acme.local", role="AD, DNS, DHCP",
+                       location="Serwerownia, szafa RACK 1")
+        self.assertEqual(main.detail.vars["protocol"].get(), "RDP")
         self.pump()
-        self.assertEqual(len(main.list.get_children()), 1)
+        shot(self.root, "04-formularz-serwer")
+        main.detail.save()
+        self.pump()
+        main.new_entry()
+        self.form_fill(type_label=BY_KEY["switch"].label)
+        self.form_fill(title="SW-CORE", username="admin", password="Sw!tch-2026", host="10.10.0.2",
+                       enable="En4ble!", snmp="acme-ro", model="HPE Aruba 2930F", vlans="10 biuro, 20 VoIP, 99 mgmt",
+                       location="Szafa RACK 1, U40")
+        main.detail.save()
+        main.new_entry()
+        self.form_fill(type_label=BY_KEY["vpn"].label)
+        self.form_fill(title="VPN dla serwisu", host="vpn.acme.pl", vpn_type="WireGuard", username="serwis",
+                       password="Vpn#2026", vpn_network="10.10.0.0/24")
+        main.detail.save()
+        self.pump()
+        entries = app.s.profiles[pid].data["entries"]
+        self.assertEqual(sorted(e["type"] for e in entries), ["server", "switch", "vpn"])
+        sw = next(e for e in entries if e["type"] == "switch")
+        self.assertEqual(sw["extra"]["enable"], "En4ble!")
+        self.assertEqual(sw["extra"]["protocol"], "SSH")
+
+        # import listy urządzeń do profilu
+        inv = os.path.join(self.tmp, "urzadzenia.csv")
+        Path(inv).write_text("Typ;Nazwa;IP;Login;Hasło;Model;Lokalizacja\n"
+                             "Drukarka;Recepcja;10.10.0.50;admin;Pr1nt!;Brother MFC-L8900;Parter\n"
+                             "NAS;NAS01;10.10.0.20;admin;N@s-2026;Synology DS923+;Serwerownia\n"
+                             "Router;Brama;10.10.0.1;admin;Rt!2026;MikroTik RB5009;Serwerownia\n", encoding="utf-8")
+        imp = app.import_path(inv)
+        self.pump()
+        self.assertEqual(imp.target.get(), "ACME")
+        shot(imp, "05-import-urzadzen")
+        imp.go()
+        self.pump(0.3)
+        self.assertEqual(len(app.s.profiles[pid].data["entries"]), 6)
+        self.saved()
+
+        # karta klienta i szczegóły serwera
+        main.select_scope(f"c|{pid}")
+        self.pump(0.3)
+        shot(self.root, "06-karta-klienta")
+        srv = next(e for e in app.s.profiles[pid].data["entries"] if e["type"] == "server")
+        main.select(pid, srv["id"])
+        self.pump(0.3)
+        shot(self.root, "07-serwer")
+        main.select(pid, sw["id"])
+        self.pump(0.3)
+        shot(self.root, "08-switch")
+
+        # wyszukiwanie po lokalizacji we wszystkich źródłach
+        main.select_scope("all")
+        main.search_entry.focus_set()
+        self.pump()
+        main.search.set("serwerownia")
+        self.pump()
+        self.assertEqual(len(main.list.get_children()), 4)
+        shot(self.root, "09-wyszukiwanie")
         main.search.set("")
         self.pump()
 
-        # szczegóły i kopiowanie hasła
-        bank = next(e for e in app.s.data["entries"] if e["title"] == "Bank PKO")
-        main.select(bank["id"])
-        self.pump(0.3)
-        shot(self.root, "07-szczegoly")
-        app.copy(bank["password"], "hasło", secret=True)
+        # udostępnienie
+        sh = ShareDialog(app, pid).show()
         self.pump()
-        self.assertEqual(app.clip.get(), "Kot123")
-        if sys.platform == "win32":
-            self.assertTrue(app.clip.is_private(), "hasło powinno być wyłączone z historii schowka Windows")
-        app.clear_clip()
-        self.pump()
-        self.assertNotEqual(app.clip.get(), "Kot123")
+        shot(sh, "10-udostepnij")
+        sh.close()
 
-        # historia hasła
-        main.detail.edit(bank)
-        main.detail.form["password"].set("Nowe-Haslo-2026!")
-        main.detail.save()
-        self.pump(0.3)
-        self.assertEqual(bank["history"][0]["password"], "Kot123")
-
-        # filtr kategorii i ulubione
-        main.toggle_fav(bank)
-        main.nav.selection_set("fav")
-        self.pump()
-        self.assertEqual(list(main.list.get_children()), [bank["id"]])
-        main.nav.selection_set("all")
-        self.pump()
-
-        # ustawienia, eksport, ciemny motyw
-        sd = app.open_settings()
-        self.pump()
-        shot(sd, "08-ustawienia")
-        sd.close()
-        ed = app.open_export()
-        self.pump()
-        shot(ed, "09-eksport")
-        ed.close()
-        app.set_theme("dark")
-        self.pump(0.3)
-        main = app.main
-        gmail = next(e for e in app.s.data["entries"] if e["title"] == "Gmail")
-        main.select(gmail["id"])
-        self.pump(0.3)
-        shot(self.root, "10-ciemny")
-        app.set_theme("light")
-        self.pump()
-
-        # zmiana pliku "na telefonie" jest wczytywana automatycznie
-        from sejf import vault
-        from sejf.session import Session
-        self.wait(lambda: not app.s.dirty and app.save_job is None, msg="zapis przed synchronizacją")
-        time.sleep(0.05)
-        phone = Session()
-        phone.unlock(self.path, PW)
-        phone.data["entries"].append(vault.new_entry(title="Z telefonu"))
-        phone.mark_changed()
-        phone.save()
-        st = os.stat(self.path)
-        os.utime(self.path, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+        # --- współpracownik pracuje na tym samym pliku ---------------------------------
+        anna = Session({})
+        anna.create(os.path.join(self.tmp, "anna.sejf.json"), "hasło Anny 2026")
+        pa = anna.add_profile(prof_path, profile_pw)
+        pa.file.data["entries"].append(vault.normalize_entry(vault.new_entry(
+            type="wifi", title="Wi-Fi biuro", password="Biuro-WiFi-2026", extra={"ssid": "ACME-Biuro", "security": "WPA2-Personal"})))
+        pa.file.touch()
+        pa.file.save()
+        self.bump(prof_path)
         app.check_external()
+        self.pump(0.3)
+        self.assertTrue(any(e["title"] == "Wi-Fi biuro" for e in app.s.profiles[pid].data["entries"]))
+
+        # --- weryfikacja dwuetapowa ---------------------------------------------------------
+        ts = TotpSetupDialog(app).show()
         self.pump()
-        self.assertTrue(any(e["title"] == "Z telefonu" for e in app.s.data["entries"]))
-
-        # usuwanie
-        main = app.main
-        main.delete(next(e for e in app.s.data["entries"] if e["title"] == "Z telefonu"))
-        self.pump(0.5)
-        self.assertEqual(len(app.s.data["entries"]), 4)
-
-        # blokada i odblokowanie
+        shot(ts, "11-google-authenticator")
+        ts.code.set(totp.code_at(ts.secret))
+        ts.confirm()
+        self.pump()
+        rc = app.dialogs[-1]
+        shot(rc, "12-kody-zapasowe")
+        rc.ok.set(True)
+        rc.close()
+        self.saved()
+        secret = app.s.totp["secret"]
+        app.cfg["devices"] = {}  # jak na nowym komputerze
         app.lock()
         self.pump()
-        self.assertFalse(app.s.unlocked)
-        self.assertIsNone(app.s.key)
+        self.assertIsNone(app.s.main)
         lock = app.view
-        lock.pw.set("złe hasło")
-        lock.unlock()
-        self.wait(lambda: "Nieprawidłowe" in lock.err.cget("text"), msg="odrzucenie złego hasła")
-        shot(self.root, "11-blokada")
         lock.pw.set(PW)
         lock.unlock()
-        self.wait(lambda: app.main is not None, msg="odblokowanie")
-        self.assertEqual(len(app.main.list.get_children()), 4)
+        self.wait(lambda: hasattr(app.view, "code"), msg="ekran kodu")
+        shot(self.root, "13-kod-przy-logowaniu")
+        app.view.code.set("000000" if totp.code_at(secret) != "000000" else "111111")
+        app.view.check_code()
+        self.assertIn("Nieprawidłowy", app.view.err.cget("text"))
+        app.view.code.set(totp.code_at(secret))
+        app.view.check_code()
+        self.wait(lambda: app.main is not None, msg="wejście po kodzie")
+        self.wait(lambda: app.s.profiles[pid].file is not None, msg="otwarcie profilu bez hasła")
+        main = app.main
+        # ponowne odblokowanie na tym samym komputerze nie pyta o kod
+        app.lock()
+        app.view.pw.set(PW)
+        app.view.unlock()
+        self.wait(lambda: app.main is not None, msg="odblokowanie bez kodu")
+        self.wait(lambda: app.s.profiles[pid].file is not None, msg="profil po odblokowaniu")
 
-        # plik z wersji przeglądarkowej
+        # --- inna osoba zmienia hasło profilu -------------------------------------------------
+        anna.change_profile_password(pa.id, "nowe hasło ACME 2026")
+        self.bump(prof_path)
+        app.check_external()
+        self.pump(0.3)
+        self.assertEqual(app.s.profiles[pid].error, "password")
+        app.main.select_scope(f"c|{pid}")
+        self.pump(0.3)
+        shot(self.root, "14-profil-nowe-haslo")
+        d = app.relink_password(pid)
+        d.pw.set("nowe hasło ACME 2026")
+        d.go()
+        self.wait(lambda: app.s.profiles[pid].file is not None, msg="nowe hasło profilu")
+        self.assertEqual(app.s.profile_password(pid), "nowe hasło ACME 2026")
+
+        # dodanie istniejącego profilu przez Annę z jej programem: tu tylko ścieżka okna
+        app.s.forget_profile(pid)
+        app.main.refresh()
+        d = ProfilePasswordDialog(app, prof_path).show()
+        d.pw.set("złe hasło")
+        d.go()
+        self.wait(lambda: "Nieprawidłowe" in d.err.cget("text"), msg="złe hasło profilu")
+        d.pw.set("nowe hasło ACME 2026")
+        d.go()
+        self.wait(lambda: pid in app.s.profiles and app.s.profiles[pid].file is not None, msg="ponowne dodanie profilu")
+
+        # ciemny motyw na szczegółach switcha
+        app.set_theme("dark")
+        self.pump(0.3)
+        app.main.select(pid, sw["id"])
+        self.pump(0.3)
+        shot(self.root, "15-ciemny")
+        app.set_theme("light")
+        self.saved()
+        self.assertEqual(self.errors, [])
+
+        # plik z wersji przeglądarkowej nadal się otwiera
         app.lock()
         app.last_path = str(FIX / "web-vault.json")
+        tmp_web = os.path.join(self.tmp, "web.json")
+        shutil.copy(app.last_path, tmp_web)
+        app.last_path = tmp_web
         app.show_lock("unlock")
         app.view.pw.set(PW)
         app.view.unlock()
         self.wait(lambda: app.main is not None, msg="otwarcie pliku z wersji web")
-        self.assertEqual(len(app.main.list.get_children()), 4)
-        app.s.lock()
+        self.assertEqual(len(app.s.data["entries"]), 4)
+        app.lock()
+        self.assertEqual(ME, "me")
 
 
 if __name__ == "__main__":

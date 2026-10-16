@@ -14,7 +14,7 @@ def run(out_path: str | None) -> int:
             os.environ["SEJF_CONFIG_DIR"] = d
             import tkinter as tk
 
-            from . import vault
+            from . import totp, vault
             from .gui import App
             from .session import Session
 
@@ -22,19 +22,24 @@ def run(out_path: str | None) -> int:
             s = Session()
             s.create(path, "hasło testowe 123")
             s.data["entries"].append(vault.new_entry(title="Test", password="x"))
-            s.mark_changed()
-            s.save()
-            Session().unlock(path, "hasło testowe 123")
-            lines.append("szyfrowanie: OK")
+            p = s.create_profile(os.path.join(d, "klient.sejfklient"), "Klient", "hasło klienta 123")
+            p.file.data["entries"].append(vault.new_entry(type="server", title="Serwer", extra={"host": "10.0.0.1"}))
+            p.file.touch(); p.file.save()
+            s.mark_changed(); s.save()
+            lines.append("szyfrowanie i profile: OK")
+            assert totp.verify(totp.new_secret() and "JBSWY3DPEHPK3PXP", totp.code_at("JBSWY3DPEHPK3PXP"))
+            lines.append("weryfikacja dwuetapowa: OK")
             root = tk.Tk()
             app = App(root)
             app.s.unlock(path, "hasło testowe 123")
-            app.enter_main()
+            app.s.open_profiles()
+            app.enter_main(keep=True)
             root.update()
-            assert len(app.main.list.get_children()) == 1
+            assert len(app.main.list.get_children()) == 2, app.main.list.get_children()
             lines.append("okno: OK")
+            import segno  # noqa: F401
             import sv_ttk  # noqa: F401
-            lines.append("motyw: OK")
+            lines.append("motyw i kody QR: OK")
             app.s.lock()
             root.destroy()
     except Exception:  # noqa: BLE001

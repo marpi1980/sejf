@@ -519,7 +519,9 @@ function normalizeVault(v) {
   v = Object.assign(base, v || {});
   v.settings = Object.assign(newVault().settings, v.settings || {});
   v.categories = Array.isArray(v.categories) ? v.categories.filter(Boolean) : [];
+  // pola, których ta wersja nie zna (np. typ urządzenia i dane z programu na Windows), zostają nietknięte
   v.entries = (Array.isArray(v.entries) ? v.entries : []).map(e => ({
+    ...e,
     id: e.id || uid(), title: String(e.title || ''), username: String(e.username || ''), password: String(e.password || ''),
     url: String(e.url || ''), notes: String(e.notes || ''), category: String(e.category || ''),
     tags: Array.isArray(e.tags) ? e.tags.map(String).filter(Boolean) : [], fav: !!e.fav,
@@ -863,7 +865,7 @@ function viewEntry(e) {
   ];
   const favBtn = iconBtn(e.fav ? 'starfill' : 'star', e.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', () => { e.fav = !e.fav; changed(); renderSide(); renderList(); renderDetail(); }, e.fav ? 'on' : '');
   const confirm = S.confirmDel ? h('div', { class: 'confirm' }, h('p', { text: `Usunąć wpis „${e.title}”? Tej operacji nie da się cofnąć.` }),
-    h('button', { type: 'button', class: 'btn danger solid', onclick: () => { S.data.entries = S.data.entries.filter(x => x.id !== e.id); S.sel = null; S.confirmDel = false; changed(); render(); toast('Usunięto wpis.'); } }, 'Usuń'),
+    h('button', { type: 'button', class: 'btn danger solid', onclick: () => { S.data.entries = S.data.entries.filter(x => x.id !== e.id); (S.data.deleted = S.data.deleted || {})[e.id] = nowIso(); S.sel = null; S.confirmDel = false; changed(); render(); toast('Usunięto wpis.'); } }, 'Usuń'),
     h('button', { type: 'button', class: 'btn', onclick: () => { S.confirmDel = false; renderDetail(); } }, 'Anuluj')) : null;
   const hist = e.history.length ? h('details', { class: 'history' }, h('summary', { text: `Poprzednie hasła (${e.history.length})` }),
     e.history.map(x => h('div', { class: 'hist-row' }, h('span', { class: 'mono', text: x.password }), h('span', { class: 'count', text: fmtDate(x.changed) }), iconBtn('copy', 'Kopiuj', () => copy(x.password, 'hasło', true))))) : null;

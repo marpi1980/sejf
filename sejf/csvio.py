@@ -5,7 +5,10 @@ import csv
 import io
 from dataclasses import dataclass
 
-from .vault import dup_key, host_of, parse_tags
+import json
+
+from .kinds import BY_KEY, KINDS
+from .vault import dup_key, host_of, norm, parse_tags
 
 COLUMNS = {
     "title": ["name", "title", "nazwa", "tytuł", "tytul", "account", "konto"],
@@ -17,7 +20,44 @@ COLUMNS = {
     "category": ["folder", "group", "grouping", "category", "kategoria", "grupa"],
     "fav": ["favorite", "fav", "ulubione"],
     "tags": ["tags", "tagi"],
+    "type": ["type", "typ", "rodzaj", "rodzaj urządzenia", "typ urządzenia", "urządzenie"],
+    "extra": ["extra", "dodatkowe"],
 }
+# kolumny z arkuszy inwentaryzacji IT → pola urządzeń
+EXTRA_COLUMNS = {
+    "host": ["host", "hostname", "ip", "adres ip", "ip address", "ip adres", "adres urządzenia", "nazwa hosta"],
+    "port": ["port"],
+    "protocol": ["protocol", "protokół", "protokol"],
+    "model": ["model", "producent", "producent i model", "vendor"],
+    "serial": ["serial", "sn", "s/n", "numer seryjny", "nr seryjny", "serial number"],
+    "mac": ["mac", "adres mac", "mac address"],
+    "location": ["location", "lokalizacja", "miejsce"],
+    "domain": ["domain", "domena"],
+    "ssid": ["ssid"],
+    "license_key": ["license key", "klucz", "klucz licencyjny", "product key"],
+    "valid_until": ["valid until", "ważna do", "wazna do", "data ważności"],
+}
+
+
+def kind_from_text(text: str) -> str | None:
+    """„Serwer”, „switch”, „Przełączniki”, „NAS” → klucz typu."""
+    t = norm(text).strip()
+    if not t:
+        return None
+    if t in BY_KEY:
+        return t
+    for k in KINDS:
+        if t in (norm(k.label), norm(k.group)) or norm(k.label).startswith(t):
+            return k.key
+    aliases = {"switch": "switch", "przelacznik": "switch", "router": "router", "firewall": "router", "nas": "nas",
+               "drukarka": "printer", "printer": "printer", "wifi": "wifi", "wi-fi": "wifi", "ap": "ap",
+               "kamera": "camera", "nvr": "camera", "ups": "ups", "baza": "database", "vpn": "vpn", "serwer": "server",
+               "server": "server", "licencja": "license", "konto": "account", "poczta": "email", "e-mail": "email",
+               "strona": "web", "www": "web"}
+    for word, key in aliases.items():
+        if word in t.split() or t.startswith(word):
+            return key
+    return None
 
 
 @dataclass
@@ -49,16 +89,22 @@ def parse(text: str) -> ImportResult:
         raise ValueError("Plik jest pusty albo ma tylko nagłówek.")
     head = [h.strip().lower() for h in rows[0]]
     idx = {k: next((i for i, h in enumerate(head) if h in names), -1) for k, names in COLUMNS.items()}
-    if idx["password"] < 0:
-        raise ValueError("Nie znaleziono kolumny z hasłami. Plik musi mieć kolumnę „password” albo „hasło”.")
+    ex_idx = {k: next((i for i, h in enumerate(head) if h in names), -1) for k, names in EXTRA_COLUMNS.items()}
+    if idx["password"] < 0 and ex_idx["host"] < 0:
+        raise ValueError("Nie znaleziono kolumny z hasłami ani adresami. Plik musi mieć kolumnę „password”/„hasło” "
+                         "albo „IP”/„host”.")
     if "login_password" in head:
         fmt = "Bitwarden"
     elif "httprealm" in head:
         fmt = "Firefox"
     elif "group" in head and "title" in head:
         fmt = "KeePass"
+    elif "type" in head and "extra" in head:
+        fmt = "Sejf"
     elif "name" in head and "url" in head:
         fmt = "Chrome / Edge / Opera"
+    elif ex_idx["host"] >= 0:
+        fmt = "Lista urządzeń"
     else:
         fmt = "CSV"
 
@@ -75,14 +121,28 @@ def parse(text: str) -> ImportResult:
             "category": get(r, "category"), "fav": get(r, "fav").lower() in ("1", "true", "tak", "yes"),
             "tags": parse_tags(get(r, "tags")),
         }
-        if not (e["password"] or e["username"] or e["notes"]):
+        extra = {}
+        raw_extra = get(r, "extra")
+        if raw_extra.startswith("{"):
+            try:
+                extra = {str(k): str(v) for k, v in json.loads(raw_extra).items() if v not in ("", None)}
+            except ValueError:
+                extra = {}
+        for key, i in ex_idx.items():
+            if 0 <= i < len(r) and r[i].strip():
+                extra.setdefault(key, r[i].strip())
+        typ = kind_from_text(get(r, "type"))
+        if not typ:
+            typ = "device" if extra.get("host") and not e["url"] else "web"
+        e["type"], e["extra"] = typ, extra
+        if not (e["password"] or e["username"] or e["notes"] or extra):
             continue
         parts = [p for p in e["category"].replace("\\", "/").split("/") if p]
         if parts and parts[0].lower() == "root":
             parts = parts[1:]
         e["category"] = parts[-1] if parts else ""
         if not e["title"]:
-            e["title"] = host_of(e["url"]) or e["username"] or "Bez nazwy"
+            e["title"] = host_of(e["url"]) or extra.get("host") or extra.get("ssid") or e["username"] or "Bez nazwy"
         out.append(e)
     return ImportResult(fmt, out)
 
@@ -101,8 +161,10 @@ def without_duplicates(existing: list[dict], incoming: list[dict]) -> list[dict]
 def to_csv(entries: list[dict]) -> str:
     buf = io.StringIO(newline="")
     w = csv.writer(buf, lineterminator="\r\n")
-    w.writerow(["name", "url", "username", "password", "note", "category", "tags", "favorite"])
+    w.writerow(["name", "url", "username", "password", "note", "category", "tags", "favorite", "type", "host", "extra"])
     for e in entries:
+        ex = e.get("extra") or {}
         w.writerow([e["title"], e["url"], e["username"], e["password"], e["notes"], e["category"],
-                    ", ".join(e["tags"]), "1" if e["fav"] else ""])
+                    ", ".join(e["tags"]), "1" if e["fav"] else "", e.get("type", "web"), ex.get("host", ""),
+                    json.dumps(ex, ensure_ascii=False) if ex else ""])
     return "﻿" + buf.getvalue()

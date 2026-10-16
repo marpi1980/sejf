@@ -19,6 +19,8 @@ jobs:
   windows:
     name: Program na Windows
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -33,7 +35,7 @@ jobs:
           python -m unittest -v tests.test_core tests.test_gui 2>&1 | tee test-results/log.txt
       - name: Zbuduj Sejf.exe
         if: always()
-        run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect Sejf.pyw
+        run: pyinstaller --noconfirm --onefile --windowed --name Sejf --icon assets/sejf.ico --collect-data sv_ttk --hidden-import darkdetect --hidden-import segno Sejf.pyw
       - name: Sprawdź zbudowany program
         if: always()
         shell: pwsh
@@ -48,6 +50,16 @@ jobs:
           path: |
             dist/Sejf.exe
             test-results/
+      - name: Zrzuty ekranu do gałęzi ci-zrzuty (tylko gałąź robocza)
+        if: always() && github.ref == 'refs/heads/gui'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/z" && cp -r test-results/. "$RUNNER_TEMP/z/" || true
+          cd "$RUNNER_TEMP/z" && git init -q && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm zrzuty
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci-zrzuty
 
   web:
     name: Wersja w przeglądarce
