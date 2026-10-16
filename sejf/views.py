@@ -447,8 +447,8 @@ class MainView(ttk.Frame):
         if self._updating:
             return
         sel = self.nav.selection()
-        if not sel:
-            return
+        if not sel or sel[0] == self.scope_iid:
+            return  # zdarzenie po odświeżeniu drzewa, wybór się nie zmienił
         if self.detail.editing is not None and not self.detail.confirm_discard():
             self._updating = True
             self.nav.selection_set(self.scope_iid)
