@@ -209,7 +209,7 @@ class GuiFlow(unittest.TestCase):
         self.pump()
         main.search.set("serwerownia")
         self.pump()
-        self.assertEqual(len(main.list.get_children()), 4)
+        self.assertEqual(len(main.list.get_children()), 3)  # DC01, NAS01, Brama
         shot(self.root, "09-wyszukiwanie")
         main.search.set("")
         self.pump()

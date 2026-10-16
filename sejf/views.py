@@ -304,9 +304,9 @@ class MainView(ttk.Frame):
     def _init_sashes(self):
         try:
             w = self.paned.winfo_width()
-            left = self.app.px(230)
+            left = self.app.px(210)
             self.paned.sashpos(0, left)
-            self.paned.sashpos(1, left + max(self.app.px(330), int((w - left) * 0.47)))
+            self.paned.sashpos(1, left + max(self.app.px(300), int((w - left) * 0.40)))
         except tk.TclError:
             pass
 
@@ -375,7 +375,8 @@ class MainView(ttk.Frame):
                 n.insert(ME, "end", iid=f"{ME}{SEP}type{SEP}{k}", text=f"{BY_KEY[k].group}  ({c})")
         for c in vault.categories(me):
             cnt = sum(e["category"] == c for e in me["entries"])
-            n.insert(ME, "end", iid=f"{ME}{SEP}cat{SEP}{c}", text=f"{c}  ({cnt})")
+            if cnt:
+                n.insert(ME, "end", iid=f"{ME}{SEP}cat{SEP}{c}", text=f"{c}  ({cnt})")
         none = sum(not e["category"] for e in me["entries"])
         if none and len(me["entries"]) > none:
             n.insert(ME, "end", iid=f"{ME}{SEP}none", text=f"Bez kategorii  ({none})")
@@ -675,7 +676,7 @@ class DetailPanel(ttk.Frame):
             msg = p.message or "Otwieram profil…"
             ttk.Label(self.body, text=msg, style="Warn.TLabel" if p.error != "loading" else "Muted.TLabel",
                       wraplength=self.app.px(440), justify="left").pack(anchor="w", pady=(16, 0))
-            ttk.Label(self.body, text=p.path, style="Small.TLabel", wraplength=self.app.px(440)).pack(anchor="w", pady=(4, 0))
+            readonly(self.body, p.path, self.app).pack(fill="x", pady=(8, 0))
             row = ttk.Frame(self.body)
             row.pack(anchor="w", pady=(14, 0))
             if p.error == "password":
@@ -720,9 +721,9 @@ class DetailPanel(ttk.Frame):
             for i, (k, c) in enumerate(counts):
                 b = ttk.Button(box, text=f"{BY_KEY[k].group}  {c}",
                                command=lambda k=k: self.main.select_scope(f"c{SEP}{pid}{SEP}type{SEP}{k}"))
-                b.grid(row=i // 3, column=i % 3, sticky="ew", padx=(0, 6), pady=(0, 6))
-            for col in range(3):
-                box.columnconfigure(col, weight=1)
+                b.grid(row=i // 2, column=i % 2, sticky="ew", padx=(0, 6), pady=(0, 6))
+            for col in range(2):
+                box.columnconfigure(col, weight=1, uniform="z")
         warn = [(e, st) for e in p.data["entries"] if (st := vault.expiry_state(e))]
         for e, (state, text) in warn[:5]:
             ttk.Label(self.body, text=f"⚠ {e['title']}: {text}", style="Error.TLabel" if state == "expired" else "Warn.TLabel",
@@ -730,12 +731,15 @@ class DetailPanel(ttk.Frame):
         foot = ttk.Frame(self.body)
         foot.pack(fill="x", pady=(18, 0))
         ttk.Label(foot, text="PLIK PROFILU", style="Field.TLabel").pack(anchor="w")
-        ttk.Label(foot, text=p.path, style="Small.TLabel", wraplength=self.app.px(440)).pack(anchor="w", pady=(2, 6))
+        readonly(foot, p.path, self.app).pack(fill="x", pady=(4, 8))
         row = ttk.Frame(foot)
-        row.pack(anchor="w")
-        ttk.Button(row, text="Pokaż w folderze", command=lambda: self.app.reveal(p.path)).pack(side="left")
-        ttk.Button(row, text="Zmień hasło profilu…", command=lambda: self.app.change_profile_password(pid)).pack(side="left", padx=(6, 0))
-        ttk.Button(row, text="Usuń z programu…", command=lambda: self.app.forget_profile(pid)).pack(side="left", padx=(6, 0))
+        row.pack(fill="x")
+        for i, (text, cmd) in enumerate((("Pokaż w folderze", lambda: self.app.reveal(p.path)),
+                                         ("Zmień hasło profilu…", lambda: self.app.change_profile_password(pid)),
+                                         ("Usuń z programu…", lambda: self.app.forget_profile(pid)))):
+            ttk.Button(row, text=text, command=cmd).grid(row=i // 2, column=i % 2, sticky="ew", padx=(0, 6), pady=(0, 6))
+        row.columnconfigure(0, weight=1, uniform="f")
+        row.columnconfigure(1, weight=1, uniform="f")
 
     # --- podgląd wpisu ----------------------------------------------------------------------
     def show(self, sid, e: dict | None):
@@ -765,9 +769,9 @@ class DetailPanel(ttk.Frame):
             ttk.Button(acts, text="Otwórz udział", command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
         if connect.ping_action(e) and connect.available():
             ttk.Button(acts, text="Ping", command=lambda: app.connect(e, connect.ping_action(e))).pack(side="left", padx=(0, 6))
-        ttk.Button(acts, text="★ W ulubionych" if e["fav"] else "☆ Ulubione",
-                   command=lambda: self.main.toggle_fav(sid, e)).pack(side="left", padx=(0, 6))
         ttk.Button(acts, text="Edytuj", command=lambda: self.edit(sid, e)).pack(side="left", padx=(0, 6))
+        ttk.Button(acts, text="★" if e["fav"] else "☆", width=3,
+                   command=lambda: self.main.toggle_fav(sid, e)).pack(side="left", padx=(0, 6))
         ttk.Button(acts, text="Usuń…", command=lambda: self.main.delete(sid, e)).pack(side="left")
 
         state = vault.expiry_state(e)
@@ -781,8 +785,8 @@ class DetailPanel(ttk.Frame):
 
         def field(label, value, secret=False, copy_what=None, link=None):
             r = row[0]
-            ttk.Label(grid, text=label.upper(), style="Field.TLabel", wraplength=app.px(130)).grid(
-                row=r, column=0, sticky="w", pady=5, padx=(0, 14))
+            ttk.Label(grid, text=label.upper(), style="Field.TLabel", wraplength=app.px(105)).grid(
+                row=r, column=0, sticky="w", pady=5, padx=(0, 10))
             ent = readonly(grid, value, app, secret=secret)
             ent.grid(row=r, column=1, sticky="ew", pady=5)
             bf = ttk.Frame(grid)
@@ -792,12 +796,13 @@ class DetailPanel(ttk.Frame):
                     shown = ent.cget("show") == ""
                     ent.configure(show="•" if shown else "")
                     show_btn.configure(text="Pokaż" if shown else "Ukryj")
-                show_btn = ttk.Button(bf, text="Pokaż", command=toggle)
+                show_btn = ttk.Button(bf, text="Pokaż", command=toggle, width=6)
                 show_btn.pack(side="left", padx=(4, 0))
             if link:
-                ttk.Button(bf, text="Otwórz", command=lambda: webbrowser.open(link)).pack(side="left", padx=(4, 0))
+                ttk.Button(bf, text="Otwórz", command=lambda: webbrowser.open(link), width=7).pack(side="left", padx=(4, 0))
             if value:
-                ttk.Button(bf, text="Kopiuj", command=lambda: app.copy(value, copy_what or label.lower(), secret=secret)).pack(side="left", padx=(4, 0))
+                ttk.Button(bf, text="Kopiuj", width=6,
+                           command=lambda: app.copy(value, copy_what or label.lower(), secret=secret)).pack(side="left", padx=(4, 0))
             row[0] += 1
             return ent
 
