@@ -56,7 +56,7 @@ KINDS: tuple[Kind, ...] = (
           Field("idrac", "Zarządzanie (iDRAC / iLO / IPMI)", hint="adres konsoli zarządzania"),
           MODEL, SERIAL, LOCATION), protocol="RDP"),
     Kind("switch", "Przełącznik (switch)", "Przełączniki",
-         (*DEVICE, Field("enable", "Hasło enable / uprzywilejowane", "secret"),
+         (*DEVICE, Field("enable", "Hasło enable", "secret"),
           Field("snmp", "SNMP community", "secret"), Field("vlans", "VLAN-y", hint="np. 10 biuro, 20 VoIP, 99 zarządzanie")),
          protocol="SSH"),
     Kind("router", "Router / firewall", "Routery i firewalle",
