@@ -38,7 +38,7 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(await page.inputValue('#f-pass') === gen, 'generator wstawia hasło do formularza');
   await page.fill('#f-cat', 'Sklepy'); await page.fill('#f-tags', 'zakupy, #2FA');
   await page.click('form.form button[type=submit]');
-  ok((await page.textContent('#detail h2')) === 'Allegro', 'zapisano i pokazano wpis');
+  await page.waitForTimeout(200); ok((await page.textContent('#detail h2')) === 'Allegro', 'zapisano i pokazano wpis: ' + await page.textContent('#detail h2'));
 
   // import
   await page.click('#btn-imp');

@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import __version__, crypto, totp, vault
 from .generator import generate
 from .session import ME, PROFILE_EXT, Session
-from .widgets import PROFILE_TYPES, Dialog, StrengthBar, readonly
+from .widgets import PROFILE_TYPES, Dialog, StrengthBar, focus_later, readonly
 
 LOCK_CHOICES = [("1 minuta", 1), ("5 minut", 5), ("15 minut", 15), ("30 minut", 30), ("1 godzina", 60), ("Nigdy", 0)]
 CLIP_CHOICES = [("15 sekundach", 15), ("30 sekundach", 30), ("1 minucie", 60), ("Nie czyść", 0)]
@@ -213,7 +213,7 @@ class AskStringDialog(Dialog):
         e.pack(fill="x")
         e.bind("<Return>", lambda ev: self.ok())
         self.buttons((button, self.ok, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
-        self.after(30, e.focus_set)
+        focus_later(e, 30)
 
     def ok(self):
         self.result = self.var.get().strip()
@@ -393,7 +393,7 @@ class TotpSetupDialog(Dialog):
         self.err = ttk.Label(b, style="Error.TLabel")
         self.err.pack(anchor="w", pady=(4, 0))
         self.buttons(("Włącz", self.confirm, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
-        self.after(50, e.focus_set)
+        focus_later(e, 50)
 
     def qr_image(self):
         try:
@@ -554,7 +554,7 @@ class ProfilePasswordDialog(Dialog):
         self.err.pack(anchor="w", pady=(6, 0))
         self.btn, _ = self.buttons(("Dodaj profil" if pid is None else "Zapisz", self.go, "Accent.TButton", "left"),
                                    ("Anuluj", self.close, None, "right"))
-        self.after(50, e.focus_set)
+        focus_later(e, 50)
 
     def go(self):
         pw = self.pw.get()

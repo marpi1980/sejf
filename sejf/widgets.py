@@ -170,6 +170,11 @@ class Dialog(tk.Toplevel):
         return out
 
 
+def focus_later(widget, ms: int = 40) -> None:
+    """Ustawia fokus po chwili, o ile pole nadal istnieje (formularz mógł zostać przebudowany)."""
+    widget.after(ms, lambda: widget.winfo_exists() and widget.focus_set())
+
+
 def readonly(parent, value: str, app, secret: bool = False, width: int = 0) -> ttk.Entry:
     """Pole tylko do odczytu, z którego można zaznaczyć i skopiować tekst."""
     kw = {"width": width} if width else {}

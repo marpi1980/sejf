@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import connect, crypto, kinds, vault
 from .kinds import BY_KEY, KINDS, kind_of
 from .session import ME, Session
-from .widgets import VAULT_TYPES, ScrollFrame, StrengthBar, cloud_folder, readonly
+from .widgets import VAULT_TYPES, ScrollFrame, StrengthBar, cloud_folder, focus_later, readonly
 
 SEP = "|"
 
@@ -85,7 +85,7 @@ class LockScreen(ttk.Frame):
         links.pack(fill="x", pady=(10, 0))
         ttk.Button(links, text="Inny plik…", command=self.pick_file).pack(side="left")
         ttk.Button(links, text="Nowy sejf…", command=self.show_create).pack(side="right")
-        self.after(50, self.pw_entry.focus_set)
+        focus_later(self.pw_entry, 50)
 
     def unlock(self):
         if not self.pw.get():
@@ -124,7 +124,7 @@ class LockScreen(ttk.Frame):
         ttk.Button(self.body, text="Potwierdź", style="Accent.TButton", command=self.check_code).pack(fill="x", pady=(8, 0), ipady=3)
         self._note("Nie masz telefonu? Wpisz w to samo pole jeden z kodów zapasowych (np. ABCD-EFGH).")
         ttk.Button(self.body, text="Anuluj i zablokuj", command=lambda: self.app.lock(save=False)).pack(anchor="w", pady=(12, 0))
-        self.after(50, e.focus_set)
+        focus_later(e, 50)
 
     def check_code(self):
         code = self.code.get().strip()
@@ -164,7 +164,7 @@ class LockScreen(ttk.Frame):
         self.btn = ttk.Button(self.body, text="Wybierz miejsce i utwórz sejf…", style="Accent.TButton", command=self.create)
         self.btn.pack(fill="x", pady=(14, 0), ipady=3)
         ttk.Button(self.body, text="Wróć", command=self.show_unlock if self.app.last_path else self.show_home).pack(anchor="w", pady=(10, 0))
-        self.after(50, e1.focus_set)
+        focus_later(e1, 50)
 
     def create(self):
         problem = Session.check_new_password(self.n1.get(), self.n2.get())
@@ -274,11 +274,11 @@ class MainView(ttk.Frame):
         e = self.search_entry
 
         def show(_=None):
-            if not self.search.get() and self.app.root.focus_get() is not e:
-                e.configure(foreground=self.app.colors["muted"])
-                e.delete(0, "end")
-                e.insert(0, hint)
-                self._hint = True
+            if not e.winfo_exists() or self.search.get() or self._focused(e):
+                return
+            self._hint = True  # przed wstawieniem tekstu, żeby lista nie filtrowała po podpowiedzi
+            e.configure(foreground=self.app.colors["muted"])
+            e.insert(0, hint)
 
         def hide(_=None):
             if getattr(self, "_hint", False):
@@ -291,6 +291,12 @@ class MainView(ttk.Frame):
         e.bind("<FocusIn>", hide, add="+")
         e.bind("<FocusOut>", show, add="+")
         self.after(50, show)
+
+    def _focused(self, w) -> bool:
+        try:
+            return self.app.root.focus_get() is w
+        except (KeyError, tk.TclError):
+            return False
 
     def query(self) -> str:
         return "" if getattr(self, "_hint", False) else self.search.get()
@@ -998,7 +1004,7 @@ class DetailPanel(ttk.Frame):
         root = app.root
         root.bind("<Control-s>", lambda ev: self.save() if self.editing is not None else None)
         root.bind("<Escape>", lambda ev: self.cancel() if self.editing is not None and not app.dialogs else None)
-        self.after(30, title.focus_set)
+        focus_later(title, 30)
 
     def _categories(self):
         ed = self.editing
@@ -1008,7 +1014,12 @@ class DetailPanel(ttk.Frame):
         return vault.categories(f.data) if f else []
 
     def _retype(self):
+        before = BY_KEY.get(self.editing["values"].get("type"), BY_KEY["web"])
         self._collect()
+        after = BY_KEY.get(self.editing["values"]["type"], BY_KEY["web"])
+        val = self.editing["values"]
+        if val.get("protocol", "") in ("", before.protocol):  # domyślny protokół podąża za typem
+            val["protocol"] = after.protocol
         self._render_form()
 
     def _use_generated(self, value):
