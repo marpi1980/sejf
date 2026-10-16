@@ -8,6 +8,9 @@ mkdir -p dist
   printf '%s\n' "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'\">"
   printf '%s\n' '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>'
   printf '%s\n' '</head>' '<body>'
+  printf '%s\n' '<script>'
+  cat src/argon2.js
+  printf '%s\n' '</script>'
   cat src/app.html
   printf '%s\n' '</body>' '</html>'
 } > dist/Sejf.html

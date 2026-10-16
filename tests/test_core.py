@@ -42,6 +42,44 @@ class CryptoTests(unittest.TestCase):
         with self.assertRaises(crypto.WrongPassword):
             crypto.decrypt(crypto.parse_envelope(json.dumps(o)), key)
 
+    def test_opens_argon2_file_from_web_version(self):
+        """Plik zaszyfrowany Argon2id w przeglądarce (JavaScript) otwiera się w programie (Python)."""
+        text = (FIX / "web-vault-argon2.json").read_text(encoding="utf-8")
+        env = crypto.parse_envelope(text)
+        self.assertEqual(env.kdf["name"], "argon2id")
+        data = crypto.decrypt(env, crypto.derive(WEB_PASSWORD, env.kdf))
+        self.assertEqual(len(data["entries"]), 4)
+
+    def test_argon2id_rfc9106(self):
+        from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
+        k = Argon2id(salt=bytes([2]) * 16, length=32, iterations=3, lanes=4, memory_cost=32, ad=bytes([4]) * 12,
+                     secret=bytes([3]) * 8).derive(bytes([1]) * 32)
+        self.assertEqual(k.hex(), "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659")
+        kdf = crypto.new_kdf()
+        self.assertTrue(crypto.kdf_is_current(kdf))
+        self.assertFalse(crypto.kdf_is_current(crypto.legacy_kdf(crypto.new_salt())))
+        self.assertEqual(crypto.derive("hasło", kdf), crypto.derive("hasło", dict(kdf)))
+        self.assertNotEqual(crypto.derive("hasło", kdf), crypto.derive("hasło", crypto.new_kdf()))
+
+    def test_identity_code_and_wrapping(self):
+        me = crypto.new_identity("Jan Kowalski")
+        other = crypto.new_identity("Obcy")
+        parsed = crypto.parse_identity_code(crypto.identity_code(me))
+        self.assertEqual((parsed["kid"], parsed["name"], parsed["pub"]), (me["kid"], "Jan Kowalski", me["pub"]))
+        for bad in ("", "SEJF1.abc", crypto.identity_code(me).replace("SEJF1", "SEJF2")):
+            with self.assertRaises(crypto.VaultError):
+                crypto.parse_identity_code(bad)
+        key, keyid = crypto.new_profile_key()
+        text = crypto.seal_profile({"x": 1}, key, keyid, [crypto.wrap_for(key, keyid, me["pub"])])
+        self.assertNotIn("Jan", text)
+        env = crypto.parse_envelope(text, "profile")
+        self.assertEqual(crypto.unwrap_identity(env, me), key)
+        self.assertIsNone(crypto.unwrap_identity(env, other))
+        with self.assertRaises(crypto.NoAccess):
+            crypto.unwrap_password(env, "cokolwiek")
+        self.assertEqual(crypto.decrypt(env, key), {"x": 1})
+        self.assertEqual(len(crypto.fingerprint(me["kid"]).split()), 4)
+
     def test_not_a_vault(self):
         for bad in ("", "{}", "nie json", json.dumps({"format": "inny"})):
             with self.assertRaises(crypto.VaultError):
@@ -176,6 +214,23 @@ class SessionTests(unittest.TestCase):
         t.unlock(self.path, "hasło główne 1")
         self.assertEqual(t.data["entries"][0]["title"], "Poczta")
 
+    def test_vault_moves_to_argon2id(self):
+        path = os.path.join(self.dir, "web.json")
+        shutil.copy(FIX / "web-vault.json", path)
+        self.assertEqual(json.loads(Path(path).read_text(encoding="utf-8"))["kdf"]["name"], "PBKDF2-SHA256")
+        a = Session()
+        a.unlock(path, WEB_PASSWORD)
+        self.assertTrue(a.upgraded)
+        o = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.assertEqual((o["version"], o["kdf"]["name"], o["kdf"]["m"]), (2, "argon2id", 65536))
+        b = Session()
+        b.unlock(path, WEB_PASSWORD)
+        self.assertFalse(b.upgraded)
+        self.assertEqual(len(b.data["entries"]), 4)
+        self.assertEqual(b.identity["kid"], a.identity["kid"])  # tożsamość zapisana w sejfie
+        with self.assertRaises(crypto.WrongPassword):
+            Session().unlock(path, "złe hasło")
+
     def test_legacy_vault_gets_stable_uid(self):
         path = os.path.join(self.dir, "web.json")
         shutil.copy(FIX / "web-vault.json", path)
@@ -242,8 +297,10 @@ class SessionTests(unittest.TestCase):
 
     def test_new_password_rules(self):
         self.assertIsNotNone(Session.check_new_password("krótkie", "krótkie"))
-        self.assertIsNotNone(Session.check_new_password("długie hasło", "inne hasło"))
-        self.assertIsNone(Session.check_new_password("długie hasło", "długie hasło"))
+        self.assertIsNotNone(Session.check_new_password("długie hasło", "długie hasło"))  # za słabe
+        self.assertIsNotNone(Session.check_new_password("wiosło kubek mapa dziesięć", "wiosło kubek mapa"))
+        self.assertIsNone(Session.check_new_password("wiosło kubek mapa dziesięć", "wiosło kubek mapa dziesięć"))
+        self.assertIsNotNone(Session.check_profile_password("krótkie"))
 
 
 class ProfileTests(unittest.TestCase):
@@ -320,22 +377,121 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(p.file.check_external(), "reloaded")
         self.assertEqual(sorted(e["title"] for e in p.data["entries"]), ["Drukarka recepcja", "Switch biuro"])
 
-    def test_profile_password_change_reaches_colleague(self):
+    def test_password_change_keeps_members_and_locks_out_others(self):
         jan = self.person("jan")
         p = jan.create_profile(self.prof, "ACME", "hasło klienta ACME")
         anna = self.person("anna")
-        anna.add_profile(self.prof, "hasło klienta ACME")
-        jan.change_profile_password(p.id, "nowe hasło ACME 2026")
-        self.assertEqual(jan.profile_password(p.id), "nowe hasło ACME 2026")
-        # Jan nadal otwiera bez pytania
+        pa = anna.add_profile(self.prof, "hasło klienta ACME")  # weszła hasłem → dopisana jako osoba
+        self.assertIn(anna.identity["kid"], [m["id"] for m in pa.data["members"]])
+        jan2 = self.reopen("jan")
+        jan2.change_profile_password(p.id, "nowe hasło ACME 2026")
+        self.assertEqual(jan2.profile_password(p.id), "nowe hasło ACME 2026")
         self.assertEqual(self.reopen("jan").profiles[p.id].error, "")
-        # Anna dostaje prośbę o nowe hasło, wpisuje je raz i więcej nie musi
+        # Anna ma własny klucz, więc zmiana hasła profilu jej nie blokuje
+        self.assertEqual(self.reopen("anna").profiles[p.id].error, "")
+        # osoba spoza listy nie wejdzie starym hasłem, a nowym tak
+        kasia = self.person("kasia")
+        with self.assertRaises(crypto.WrongPassword):
+            kasia.add_profile(self.prof, "hasło klienta ACME")
+        kasia.add_profile(self.prof, "nowe hasło ACME 2026")
+
+    def test_add_member_by_code_without_password(self):
+        jan = self.person("jan")
+        p = jan.create_profile(self.prof, "ACME", None)  # bez dostępu hasłem
+        piotr = self.person("piotr")
+        with self.assertRaises(crypto.NoAccess):
+            piotr.add_profile(self.prof)
+        with self.assertRaises(crypto.NoAccess):
+            piotr.add_profile(self.prof, "jakieś hasło")
+        code = piotr.my_code()
+        self.assertTrue(code.startswith("SEJF1."))
+        jan.add_member(p.id, code)
+        with self.assertRaises(crypto.VaultError):
+            jan.add_member(p.id, code)  # drugi raz
+        with self.assertRaises(crypto.VaultError):
+            jan.add_member(p.id, code[:-1] + ("0" if code[-1] != "0" else "1"))  # uszkodzony kod
+        pp = piotr.add_profile(self.prof)
+        self.assertEqual(pp.name, "ACME")
+        self.assertEqual(pp.file.opened_by, "identity")
+        self.assertNotIn("password", piotr._meta(p.id))  # brak hasła do przechowania
+        self.assertEqual(len(pp.data["members"]), 2)
+
+    def test_log_from_two_people_is_merged(self):
+        jan = self.person("jan")
+        jan.set_my_name("Jan Kowalski")
+        p = jan.create_profile(self.prof, "ACME", None)
+        anna = self.person("anna")
+        anna.set_my_name("Anna Nowak")
+        jan.add_member(p.id, anna.my_code())
+        pa = anna.add_profile(self.prof)
+        e = vault.new_entry(type="server", title="DC01")
+        p.file.data["entries"].append(e)
+        jan.log(p.id, "dodał wpis", e)
+        p.file.save()
+        self.bump(self.prof)
+        anna.log(p.id, "skopiował hasło", e)
+        self.assertEqual(pa.file.save(), "merged")
+        self.bump(self.prof)
+        p.file.check_external()
+        who = [(x["who"], x["action"], x["title"]) for x in p.data["log"] if x["title"] == "DC01"]
+        self.assertEqual(who, [("Jan Kowalski", "dodał wpis", "DC01"), ("Anna Nowak", "skopiował hasło", "DC01")])
+        jan.log("me", "nic")  # dla „Moich haseł” brak dziennika
+
+    def test_remove_member_revokes_access(self):
+        jan = self.person("jan")
+        p = jan.create_profile(self.prof, "ACME", "hasło klienta ACME")
+        anna, piotr = self.person("anna"), self.person("piotr")
+        jan.add_member(p.id, anna.my_code())
+        jan.add_member(p.id, piotr.my_code())
+        pa = anna.add_profile(self.prof)
+        pp = piotr.add_profile(self.prof)
+        old_keyid = p.file.keyid
+        # Piotr ma niezapisaną zmianę, gdy Jan odbiera dostęp Annie
+        pp.file.data["entries"].append(vault.new_entry(title="Od Piotra"))
+        pp.file.touch()
+        jan.remove_member(p.id, anna.identity["kid"])
+        self.assertNotEqual(p.file.keyid, old_keyid)
+        self.assertFalse(jan.password_access(p.id))  # Anna mogła znać hasło
+        self.assertEqual(jan.profile_password(p.id), "")
+        self.bump(self.prof)
+        # Piotr dostaje nowy klucz automatycznie i jego zmiana się łączy
+        self.assertEqual(pp.file.save(), "merged")
+        self.assertEqual(pp.file.keyid, p.file.keyid)
+        self.bump(self.prof)
+        self.assertEqual(p.file.check_external(), "reloaded")
+        self.assertEqual([e["title"] for e in p.data["entries"]], ["Od Piotra"])
+        self.assertNotIn(anna.identity["kid"], [m["id"] for m in p.data["members"]])  # nie wróciła przez scalanie
+        # Anna: otwarta sesja traci dostęp, ponowne uruchomienie też, hasło już nie działa
+        self.assertEqual(pa.file.check_external(), "password")
         anna2 = self.reopen("anna")
         self.assertEqual(anna2.profiles[p.id].error, "password")
-        with self.assertRaises(crypto.WrongPassword):
-            anna2.relink_profile(p.id, password="stare hasło")
-        anna2.relink_profile(p.id, password="nowe hasło ACME 2026")
-        self.assertEqual(self.reopen("anna").profiles[p.id].error, "")
+        with self.assertRaises(crypto.NoAccess):
+            anna2.relink_profile(p.id, password="hasło klienta ACME")
+        # nie można odebrać dostępu sobie
+        with self.assertRaises(crypto.VaultError):
+            jan.remove_member(p.id, jan.identity["kid"])
+        actions = [x["action"] for x in p.data["log"]]
+        self.assertIn("odebrał dostęp", actions)
+        self.assertIn("dodał osobę", actions)
+
+    def test_legacy_profile_is_upgraded(self):
+        """Profil z wersji 3.1 (PBKDF2, wspólne hasło) przechodzi na klucze osób przy otwarciu."""
+        data = vault.new_profile("Stary klient")
+        data["entries"].append(vault.new_entry(type="server", title="Stary serwer"))
+        salt = crypto.new_salt()
+        Path(self.prof).write_text(crypto.seal(data, crypto.derive_key("hasło profilu 1", salt), salt, kind="profile"),
+                                   encoding="utf-8")
+        self.assertEqual(json.loads(Path(self.prof).read_text(encoding="utf-8"))["version"], 1)
+        jan = self.person("jan")
+        p = jan.add_profile(self.prof, "hasło profilu 1")
+        o = json.loads(Path(self.prof).read_text(encoding="utf-8"))
+        self.assertEqual((o["version"], o["format"]), (2, "sejf-profile"))
+        self.assertIn("password", [r["kid"] for r in o["keys"]["recipients"]])
+        self.assertEqual(p.data["entries"][0]["title"], "Stary serwer")
+        self.assertTrue(jan.password_access(p.id))
+        anna = self.person("anna")
+        anna.add_profile(self.prof, "hasło profilu 1")  # to samo hasło działa dalej
+        self.assertEqual(self.reopen("jan").profiles[p.id].error, "")
 
     def test_missing_file_and_relink(self):
         jan = self.person("jan")

@@ -149,7 +149,7 @@ class LockScreen(ttk.Frame):
         self.n1, self.n2 = tk.StringVar(), tk.StringVar()
         e1 = ttk.Entry(self.body, textvariable=self.n1, show="•", width=40)
         e1.pack(fill="x")
-        self.meter = StrengthBar(self.body, self.app, "Co najmniej 8 znaków. Najlepiej kilka słów.")
+        self.meter = StrengthBar(self.body, self.app, "Co najmniej 10 znaków, ocena „Silne”. Najlepiej 4–5 słów.")
         self.meter.pack(anchor="w", pady=(6, 0))
         ttk.Label(self.body, text="POWTÓRZ HASŁO GŁÓWNE", style="Field.TLabel").pack(anchor="w", pady=(12, 4))
         e2 = ttk.Entry(self.body, textvariable=self.n2, show="•", width=40)
@@ -517,7 +517,8 @@ class MainView(ttk.Frame):
     def copy_selected(self, field):
         sel = self.selected()
         if sel and sel[1][field]:
-            self.app.copy(sel[1][field], "hasło" if field == "password" else "login", secret=field == "password")
+            self.app.copy(sel[1][field], "hasło" if field == "password" else "login", secret=field == "password",
+                          log=sel)
         return "break"
 
     def delete(self, sid, e):
@@ -527,6 +528,7 @@ class MainView(ttk.Frame):
         if messagebox.askyesno("Usuń wpis", f"Usunąć wpis „{e['title']}”?{where}\n\nTej operacji nie da się cofnąć.",
                                icon="warning", parent=self.app.root):
             vault.delete_entry(self.s.source(sid).data, e["id"])
+            self.s.log(sid, "usunął wpis", e)
             self.detail.editing = None
             self.app.changed(sid)
             self.refresh()
@@ -591,7 +593,7 @@ class MainView(ttk.Frame):
             m.add_command(label="Kopiuj adres", command=lambda: self.app.copy(addr, "adres"))
         act = connect.plan(e)
         if act and (connect.available() or act.kind == "url"):
-            m.add_command(label=act.label, command=lambda: self.app.connect(e, act))
+            m.add_command(label=act.label, command=lambda: self.app.connect(e, act, sid))
         m.add_separator()
         m.add_command(label="Edytuj", command=lambda: self.detail.edit(sid, e))
         m.add_command(label="Usuń…", command=lambda: self.delete(sid, e))
@@ -685,14 +687,25 @@ class DetailPanel(ttk.Frame):
             if p.error in ("missing", "corrupt"):
                 ttk.Button(row, text="Wskaż plik…", style="Accent.TButton",
                            command=lambda: self.app.relink_file(pid)).pack(side="left", padx=(0, 8))
+            if p.error == "password":
+                ttk.Button(row, text="Sprawdź ponownie", command=lambda: self.app.retry_profile(pid)).pack(side="left", padx=(0, 8))
             if p.error != "loading":
                 ttk.Button(row, text="Usuń z programu…", command=lambda: self.app.forget_profile(pid)).pack(side="left")
+            if p.error == "password":
+                ttk.Label(self.body, text="Jeśli ktoś dodał Cię do profilu Twoim kodem, kliknij „Sprawdź ponownie”. "
+                                          "Twój kod: Ustawienia → Mój kod.", style="Small.TLabel",
+                          wraplength=self.app.px(440), justify="left").pack(anchor="w", pady=(10, 0))
             return
         acts = ttk.Frame(self.body)
         acts.pack(fill="x", pady=(14, 0))
         ttk.Button(acts, text="＋ Nowy wpis", style="Accent.TButton", command=self.main.new_entry).pack(side="left")
         ttk.Button(acts, text="Dane klienta…", command=lambda: self.app.edit_profile_info(pid)).pack(side="left", padx=(6, 0))
         ttk.Button(acts, text="Udostępnij…", command=lambda: self.app.share_profile(pid)).pack(side="left", padx=(6, 0))
+        ttk.Button(acts, text="Dziennik…", command=lambda: self.app.open_log(pid)).pack(side="left", padx=(6, 0))
+        members = p.data.get("members") or []
+        names = ", ".join(m.get("name") or "?" for m in members[:4]) + (f" i {len(members) - 4} innych" if len(members) > 4 else "")
+        access = "Osoby z dostępem: " + names + ("  ·  dostęp hasłem włączony" if (p.data.get("access") or {}).get("password") else "")
+        ttk.Label(self.body, text=access, style="Small.TLabel", wraplength=self.app.px(440), justify="left").pack(anchor="w", pady=(8, 0))
         info = p.data.get("info") or {}
         grid = ttk.Frame(self.body)
         grid.pack(fill="x", pady=(18, 0))
@@ -769,13 +782,13 @@ class DetailPanel(ttk.Frame):
         acts.pack(fill="x", pady=(12, 0))
         act = connect.plan(e)
         if act and (connect.available() or act.kind == "url"):
-            ttk.Button(acts, text=act.label, style="Accent.TButton", command=lambda: app.connect(e, act)).pack(side="left", padx=(0, 6))
+            ttk.Button(acts, text=act.label, style="Accent.TButton", command=lambda: app.connect(e, act, sid)).pack(side="left", padx=(0, 6))
         con = connect.console_action(e)
         if con:
-            ttk.Button(acts, text=con.label, command=lambda: app.connect(e, con)).pack(side="left", padx=(0, 6))
+            ttk.Button(acts, text=con.label, command=lambda: app.connect(e, con, sid)).pack(side="left", padx=(0, 6))
         sh = connect.share_action(e)
         if sh and connect.available() and not (act and act.target == sh.target):
-            ttk.Button(acts, text=sh.label, command=lambda: app.connect(e, sh)).pack(side="left", padx=(0, 6))
+            ttk.Button(acts, text=sh.label, command=lambda: app.connect(e, sh, sid)).pack(side="left", padx=(0, 6))
         if connect.ping_action(e) and connect.available():
             ttk.Button(acts, text="Ping", command=lambda: app.connect(e, connect.ping_action(e))).pack(side="left", padx=(0, 6))
 
@@ -801,13 +814,16 @@ class DetailPanel(ttk.Frame):
                     shown = ent.cget("show") == ""
                     ent.configure(show="•" if shown else "")
                     show_btn.configure(text="Pokaż" if shown else "Ukryj")
+                    if not shown:
+                        app.log(sid, f"wyświetlił: {label.lower()}", e)
                 show_btn = ttk.Button(bf, text="Pokaż", command=toggle, width=6)
                 show_btn.pack(side="left", padx=(4, 0))
             if link:
                 ttk.Button(bf, text="Otwórz", command=lambda: webbrowser.open(link), width=7).pack(side="left", padx=(4, 0))
             if value:
                 ttk.Button(bf, text="Kopiuj", width=6,
-                           command=lambda: app.copy(value, copy_what or label.lower(), secret=secret)).pack(side="left", padx=(4, 0))
+                           command=lambda: app.copy(value, copy_what or label.lower(), secret=secret,
+                                                    log=(sid, e))).pack(side="left", padx=(4, 0))
             row[0] += 1
             return ent
 
@@ -1250,14 +1266,17 @@ class DetailPanel(ttk.Frame):
                   "accounts": vault.clean_accounts(ed["accounts"]),
                   "custom": vault.clean_custom(ed["custom"])}
         if old:
+            changed_secret = old["password"] != fields["password"] or old.get("accounts") != fields["accounts"]
             vault.update_entry(old, fields)
             e = old
+            s.log(ed["sid"], "zmienił wpis" + (" (w tym hasło)" if changed_secret else ""), e)
             if target != ed["sid"]:
                 s.move_entry(e, ed["sid"], target)
                 self.app.changed(ed["sid"])
         else:
             e = vault.new_entry(**fields)
             s.source(target).data["entries"].append(e)
+            s.log(target, "dodał wpis", e)
         data = s.source(target).data
         if fields["category"] and fields["category"] not in data.setdefault("categories", []):
             data["categories"].append(fields["category"])

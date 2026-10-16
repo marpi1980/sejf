@@ -281,6 +281,13 @@ class SettingsDialog(Dialog):
             ttk.Label(left, text=label, style="Field.TLabel").pack(anchor="w", pady=(0, 4))
             combo(left, tk.StringVar(), choices, cur, fn).pack(anchor="w", pady=(0, 14))
 
+        self.on_system = tk.BooleanVar(value=st.get("lockOnSystem", True))
+
+        def set_on_system():
+            st["lockOnSystem"] = bool(self.on_system.get())
+            app.changed(ME)
+        ttk.Checkbutton(left, text="Blokuj, gdy zablokuję Windows (Win+L)\nalbo komputer przejdzie w uśpienie",
+                        variable=self.on_system, command=set_on_system).pack(anchor="w", pady=(0, 14))
         ttk.Separator(left).pack(fill="x", pady=(4, 14))
         ttk.Label(left, text="Zmiana hasła głównego", style="Strong.TLabel").pack(anchor="w")
         self.cur, self.n1, self.n2 = tk.StringVar(), tk.StringVar(), tk.StringVar()
@@ -297,8 +304,15 @@ class SettingsDialog(Dialog):
         self.btn = ttk.Button(left, text="Zmień hasło główne", command=self.change)
         self.btn.pack(anchor="w", pady=(4, 0))
 
-        self.tf = right
+        self.tf = ttk.Frame(right)
+        self.tf.pack(fill="x", anchor="n")
         self.render_totp()
+        ttk.Separator(right).pack(fill="x", pady=(16, 14))
+        ttk.Label(right, text="Udostępnianie profili", style="Strong.TLabel").pack(anchor="w")
+        ttk.Label(right, text=f"Jesteś widoczny jako: {app.s.identity.get('name', '')}\n"
+                              f"Odcisk klucza: {crypto.fingerprint(app.s.identity['kid'])}", style="Muted.TLabel",
+                  justify="left").pack(anchor="w", pady=(6, 8))
+        ttk.Button(right, text="Mój kod…", command=lambda: (self.close(), app.open_my_code())).pack(anchor="w")
         bt = ttk.Frame(b)
         bt.pack(fill="x", pady=(18, 0))
         ttk.Label(bt, text=f"Sejf {__version__}", style="Muted.TLabel").pack(side="left")
@@ -498,16 +512,20 @@ class NewProfileDialog(Dialog):
             if col + span == 2:
                 r += 2
         self.vars["name"].trace_add("write", lambda *a: self.update_path())
-        ttk.Label(b, text="HASŁO PROFILU", style="Field.TLabel").pack(anchor="w", pady=(16, 3))
-        pr = ttk.Frame(b)
-        pr.pack(fill="x")
+        ttk.Label(b, text="DOSTĘP", style="Field.TLabel").pack(anchor="w", pady=(16, 3))
+        ttk.Label(b, text="Ty masz dostęp swoim kluczem. Współpracowników dodasz później w oknie „Udostępnij” "
+                          "ich kodami, bez przekazywania żadnego hasła.", style="Small.TLabel",
+                  wraplength=app.px(480), justify="left").pack(anchor="w")
+        self.use_pw = tk.BooleanVar(value=False)
+        ttk.Checkbutton(b, text="Pozwól też otwierać profil hasłem (wygodne, ale mniej bezpieczne)", variable=self.use_pw,
+                        command=self._toggle_pw).pack(anchor="w", pady=(8, 0))
+        self.pr = ttk.Frame(b)
         self.pw = tk.StringVar(value=profile_password())
-        ttk.Entry(pr, textvariable=self.pw, font=app.mono).pack(side="left", fill="x", expand=True)
-        ttk.Button(pr, text="Losuj", command=lambda: self.pw.set(profile_password())).pack(side="left", padx=(6, 0))
-        ttk.Button(pr, text="Kopiuj", command=lambda: app.copy(self.pw.get(), "hasło profilu", secret=True)).pack(side="left", padx=(6, 0))
-        ttk.Label(b, text="Program zapamięta to hasło w Twoim sejfie, więc nie będziesz go wpisywać. "
-                          "Przekażesz je osobom, którym udostępnisz profil.", style="Small.TLabel",
-                  wraplength=app.px(480), justify="left").pack(anchor="w", pady=(4, 0))
+        ttk.Entry(self.pr, textvariable=self.pw, font=app.mono).pack(side="left", fill="x", expand=True)
+        ttk.Button(self.pr, text="Losuj", command=lambda: self.pw.set(profile_password())).pack(side="left", padx=(6, 0))
+        ttk.Button(self.pr, text="Kopiuj", command=lambda: app.copy(self.pw.get(), "hasło profilu", secret=True)).pack(side="left", padx=(6, 0))
+        self.pr_anchor = ttk.Frame(b)
+        self.pr_anchor.pack(fill="x")
         ttk.Label(b, text="PLIK PROFILU", style="Field.TLabel").pack(anchor="w", pady=(16, 3))
         fr = ttk.Frame(b)
         fr.pack(fill="x")
@@ -520,6 +538,12 @@ class NewProfileDialog(Dialog):
         self.err = ttk.Label(b, style="Error.TLabel", wraplength=app.px(480))
         self.err.pack(anchor="w", pady=(6, 0))
         self.btn, _ = self.buttons(("Utwórz profil", self.create, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
+
+    def _toggle_pw(self):
+        if self.use_pw.get():
+            self.pr.pack(in_=self.pr_anchor, fill="x", pady=(6, 0))
+        else:
+            self.pr.pack_forget()
 
     def update_path(self):
         if not self.custom_path:
@@ -539,8 +563,10 @@ class NewProfileDialog(Dialog):
         if not name:
             self.err.configure(text="Wpisz nazwę klienta.")
             return
-        if len(self.pw.get()) < 8:
-            self.err.configure(text="Hasło profilu musi mieć co najmniej 8 znaków.")
+        pw = self.pw.get() if self.use_pw.get() else None
+        problem = Session.check_profile_password(pw) if pw is not None else None
+        if problem:
+            self.err.configure(text=problem)
             return
         path = self.path.get()
         if os.path.exists(path):
@@ -549,7 +575,6 @@ class NewProfileDialog(Dialog):
             return
         info = {k: v.get().strip() for k, v in self.vars.items() if k != "name" and v.get().strip()}
         self.btn.configure(text="Tworzę…", state="disabled")
-        pw = self.pw.get()
 
         def done(p):
             self.close()
@@ -573,11 +598,16 @@ class ProfilePasswordDialog(Dialog):
         ttk.Label(b, text="Dodaj profil klienta" if pid is None else "Nowe hasło profilu", style="Title.TLabel").pack(anchor="w")
         ttk.Label(b, text=os.path.basename(path), style="Mono.TLabel").pack(anchor="w", pady=(6, 0))
         ttk.Label(b, text=os.path.dirname(path), style="Small.TLabel", wraplength=app.px(400)).pack(anchor="w")
-        note = ("Wpisz hasło profilu, które dostałeś od osoby udostępniającej. Program je zapamięta i więcej "
-                "nie zapyta." if pid is None else
-                "Ktoś zmienił hasło tego profilu. Wpisz nowe hasło; program je zapamięta.")
-        ttk.Label(b, text=note, wraplength=app.px(400), justify="left").pack(anchor="w", pady=(12, 0))
-        ttk.Label(b, text="HASŁO PROFILU", style="Field.TLabel").pack(anchor="w", pady=(12, 4))
+        note = ("Nie masz jeszcze dostępu do tego profilu. Są dwie możliwości:" if pid is None else
+                "Nie masz już dostępu do tego profilu: ktoś zmienił jego hasło albo odebrał Ci dostęp. Są dwie możliwości:")
+        ttk.Label(b, text=note, wraplength=app.px(420), justify="left").pack(anchor="w", pady=(12, 0))
+        box, card = app.card(b, 12)
+        box.pack(fill="x", pady=(10, 0))
+        ttk.Label(card, text="1. Wyślij swój kod osobie, która ma dostęp", style="Strong.TLabel").pack(anchor="w")
+        ttk.Label(card, text="Doda Cię w oknie „Udostępnij”. Potem wybierz ten plik jeszcze raz, hasło nie będzie potrzebne.",
+                  style="Small.TLabel", wraplength=app.px(400), justify="left").pack(anchor="w", pady=(2, 6))
+        ttk.Button(card, text="Kopiuj mój kod", command=lambda: app.copy(app.s.my_code(), "Twój kod")).pack(anchor="w")
+        ttk.Label(b, text="2. ALBO WPISZ HASŁO PROFILU", style="Field.TLabel").pack(anchor="w", pady=(14, 4))
         self.pw = tk.StringVar()
         e = ttk.Entry(b, textvariable=self.pw, show="•", font=app.mono)
         e.pack(fill="x")
@@ -585,8 +615,8 @@ class ProfilePasswordDialog(Dialog):
         self.pw.trace_add("write", lambda *a: self.err.configure(text=""))
         self.err = ttk.Label(b, style="Error.TLabel", wraplength=app.px(400))
         self.err.pack(anchor="w", pady=(6, 0))
-        self.btn, _ = self.buttons(("Dodaj profil" if pid is None else "Zapisz", self.go, "Accent.TButton", "left"),
-                                   ("Anuluj", self.close, None, "right"))
+        self.btn, _ = self.buttons(("Otwórz hasłem", self.go, "Accent.TButton", "left"),
+                                   ("Zamknij", self.close, None, "right"))
         focus_later(e, 50)
 
     def go(self):
@@ -604,7 +634,7 @@ class ProfilePasswordDialog(Dialog):
 
         def done(p):
             self.close()
-            self.app.profile_ready(p.id, f"Dodano profil „{p.name}”." if self.pid is None else "Zapisano nowe hasło profilu.")
+            self.app.profile_ready(p.id, f"Dodano profil „{p.name}”." if self.pid is None else "Odzyskano dostęp do profilu.")
 
         def fail(e):
             if self.winfo_exists():
@@ -656,48 +686,138 @@ class ProfileInfoDialog(Dialog):
 
 
 class ShareDialog(Dialog):
+    """Osoby z dostępem do profilu, dostęp hasłem, plik."""
+
     def __init__(self, app, pid):
         super().__init__(app, "Udostępnij profil")
         self.pid = pid
+        self.render()
+
+    def render(self):
+        app, pid = self.app, self.pid
+        for w in self.body.winfo_children():
+            w.destroy()
         p = app.s.profiles[pid]
         b = self.body
+        me = app.s.identity["kid"]
         ttk.Label(b, text=f"Udostępnij „{p.name}”", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(b, text="Druga osoba potrzebuje pliku profilu i jego hasła. W programie Sejf wybiera "
-                          "„＋ Klient → Dodaj profil z pliku” i raz wpisuje hasło.",
-                  wraplength=app.px(460), justify="left").pack(anchor="w", pady=(8, 0))
-        box, card = app.card(b, 14)
-        box.pack(fill="x", pady=(14, 0))
-        ttk.Label(card, text="1. PLIK PROFILU", style="Field.TLabel").pack(anchor="w")
+        ttk.Label(b, text="Każda osoba ma własny klucz. Żeby dodać kogoś, poproś o jego kod (w jego programie: "
+                          "Ustawienia → Mój kod) i wklej go poniżej. Odebranie dostępu wymienia klucz profilu.",
+                  wraplength=app.px(500), justify="left").pack(anchor="w", pady=(6, 0))
+
+        box, card = app.card(b, 12)
+        box.pack(fill="x", pady=(12, 0))
+        ttk.Label(card, text="OSOBY Z DOSTĘPEM", style="Field.TLabel").pack(anchor="w")
+        lst = ttk.Frame(card)
+        lst.pack(fill="x", pady=(6, 0))
+        lst.columnconfigure(0, weight=1)
+        for i, m in enumerate(sorted(app.s.members(pid), key=lambda m: (m["id"] != me, m.get("name", "").lower()))):
+            name = m.get("name") or "Bez nazwy"
+            ttk.Label(lst, text=name + ("  (Ty)" if m["id"] == me else ""), style="Strong.TLabel").grid(row=i, column=0, sticky="w", pady=3)
+            ttk.Label(lst, text=crypto.fingerprint(m["id"]), style="Small.TLabel").grid(row=i, column=1, sticky="w", padx=(12, 12))
+            if m["id"] != me:
+                ttk.Button(lst, text="Odbierz dostęp…", command=lambda m=m: self.remove(m)).grid(row=i, column=2, sticky="e")
+        row = ttk.Frame(card)
+        row.pack(fill="x", pady=(10, 0))
+        self.code = tk.StringVar()
+        ttk.Entry(row, textvariable=self.code, font=app.mono).pack(side="left", fill="x", expand=True)
+        ttk.Button(row, text="Dodaj osobę", style="Accent.TButton", command=self.add).pack(side="left", padx=(6, 0))
+        ttk.Label(card, text="Wklej kod osoby (zaczyna się od SEJF1.). Po dodaniu ta osoba wybiera w swoim programie "
+                             "„＋ Klient → Dodaj profil z pliku” i wskazuje ten sam plik, bez hasła.",
+                  style="Small.TLabel", wraplength=app.px(470), justify="left").pack(anchor="w", pady=(4, 0))
+        self.err = ttk.Label(card, style="Error.TLabel", wraplength=app.px(470))
+        self.err.pack(anchor="w")
+
+        box, card = app.card(b, 12)
+        box.pack(fill="x", pady=(10, 0))
+        ttk.Label(card, text="DOSTĘP HASŁEM PROFILU", style="Field.TLabel").pack(anchor="w")
+        if app.s.password_access(pid):
+            pw = app.s.profile_password(pid)
+            ttk.Label(card, text="Włączony: każdy, kto zna hasło, może otworzyć profil i zostaje dopisany do osób.",
+                      style="Warn.TLabel", wraplength=app.px(470), justify="left").pack(anchor="w", pady=(4, 6))
+            if pw:
+                row = ttk.Frame(card)
+                row.pack(fill="x")
+                ent = readonly(row, pw, app, secret=True)
+                ent.pack(side="left", fill="x", expand=True)
+                show = ttk.Button(row, text="Pokaż")
+
+                def toggle():
+                    shown = ent.cget("show") == ""
+                    ent.configure(show="•" if shown else "")
+                    show.configure(text="Pokaż" if shown else "Ukryj")
+                show.configure(command=toggle)
+                show.pack(side="left", padx=(6, 0))
+                ttk.Button(row, text="Kopiuj", command=lambda: app.copy(pw, "hasło profilu", secret=True)).pack(side="left", padx=(6, 0))
+            row = ttk.Frame(card)
+            row.pack(anchor="w", pady=(8, 0))
+            ttk.Button(row, text="Wyłącz dostęp hasłem", command=self.disable_pw).pack(side="left")
+            ttk.Button(row, text="Zmień hasło…", command=lambda: (self.close(), app.change_profile_password(pid))).pack(side="left", padx=(6, 0))
+        else:
+            ttk.Label(card, text="Wyłączony (zalecane): profil otwierają tylko osoby z listy.", style="Muted.TLabel").pack(anchor="w", pady=(4, 6))
+            ttk.Button(card, text="Włącz z nowym hasłem…", command=lambda: (self.close(), app.change_profile_password(pid))).pack(anchor="w")
+
+        box, card = app.card(b, 12)
+        box.pack(fill="x", pady=(10, 0))
+        ttk.Label(card, text="PLIK PROFILU", style="Field.TLabel").pack(anchor="w")
         readonly(card, p.path, app).pack(fill="x", pady=(4, 6))
         row = ttk.Frame(card)
         row.pack(anchor="w")
         ttk.Button(row, text="Pokaż w folderze", command=lambda: app.reveal(p.path)).pack(side="left")
         ttk.Button(row, text="Zapisz kopię pliku…", command=self.copy_file).pack(side="left", padx=(6, 0))
-        ttk.Label(card, text="Najlepiej trzymać plik we wspólnym folderze (Dysk Google, OneDrive, serwer plików). "
-                             "Wtedy wszyscy pracują na tym samym profilu i widzą swoje zmiany. Kopia wysłana "
-                             "e-mailem staje się osobnym plikiem.", style="Small.TLabel",
-                  wraplength=app.px(430), justify="left").pack(anchor="w", pady=(8, 0))
-        box, card = app.card(b, 14)
-        box.pack(fill="x", pady=(10, 0))
-        ttk.Label(card, text="2. HASŁO PROFILU", style="Field.TLabel").pack(anchor="w")
-        row = ttk.Frame(card)
-        row.pack(fill="x", pady=(4, 0))
-        pw = app.s.profile_password(pid)
-        ent = readonly(row, pw, app, secret=True)
-        ent.pack(side="left", fill="x", expand=True)
-        show = ttk.Button(row, text="Pokaż")
+        ttk.Label(card, text="Najlepiej trzymać plik we wspólnym folderze (Dysk Google, OneDrive, serwer plików), "
+                             "wtedy wszyscy widzą swoje zmiany.", style="Small.TLabel",
+                  wraplength=app.px(470), justify="left").pack(anchor="w", pady=(6, 0))
+        self.buttons(("Zamknij", self.close, None, "right"))
 
-        def toggle():
-            shown = ent.cget("show") == ""
-            ent.configure(show="•" if shown else "")
-            show.configure(text="Pokaż" if shown else "Ukryj")
-        show.configure(command=toggle)
-        show.pack(side="left", padx=(6, 0))
-        ttk.Button(row, text="Kopiuj", command=lambda: app.copy(pw, "hasło profilu", secret=True)).pack(side="left", padx=(6, 0))
-        ttk.Label(card, text="Przekaż hasło innym kanałem niż plik, np. telefonicznie albo SMS-em.",
-                  style="Small.TLabel").pack(anchor="w", pady=(8, 0))
-        self.buttons(("Zmień hasło profilu…", lambda: (self.close(), app.change_profile_password(pid)), None, "left"),
-                     ("Zamknij", self.close, None, "right"))
+    def add(self):
+        def done(m):
+            self.app.flash(f"Dodano: {m['name']}.")
+            if self.winfo_exists():
+                self.render()
+
+        def fail(e):
+            if self.winfo_exists():
+                self.err.configure(text=str(e))
+
+        code = self.code.get()
+        self.app.run_bg(lambda: self.app.s.add_member(self.pid, code), done, fail)
+
+    def remove(self, m):
+        name = m.get("name") or "ta osoba"
+        if not messagebox.askyesno(
+                "Odbierz dostęp",
+                f"Odebrać dostęp: {name}?\n\nProfil dostanie nowy klucz, a dostęp hasłem zostanie wyłączony, bo ta "
+                f"osoba mogła je znać. {name} nie otworzy już aktualnej wersji profilu.\n\nKopie pliku, które ta osoba "
+                f"zrobiła wcześniej, nadal otworzy. Zmień hasła do urządzeń, które mogła poznać.",
+                icon="warning", parent=self):
+            return
+        self.app.flush_save(self.pid)
+
+        def done(_):
+            self.app.after_profile_change(self.pid, f"Odebrano dostęp: {name}.")
+            if self.winfo_exists():
+                self.render()
+
+        def fail(e):
+            if self.winfo_exists():
+                self.err.configure(text=str(e))
+
+        self.app.run_bg(lambda: self.app.s.remove_member(self.pid, m["id"]), done, fail)
+
+    def disable_pw(self):
+        if not messagebox.askyesno("Dostęp hasłem", "Wyłączyć dostęp hasłem? Profil dostanie nowy klucz. Osoby z listy "
+                                   "zachowają dostęp, a hasło profilu przestanie działać.", parent=self):
+            return
+        self.app.flush_save(self.pid)
+
+        def done(_):
+            self.app.after_profile_change(self.pid, "Wyłączono dostęp hasłem.")
+            if self.winfo_exists():
+                self.render()
+
+        self.app.run_bg(lambda: self.app.s.set_password_access(self.pid, None), done,
+                        lambda e: self.err.configure(text=str(e)) if self.winfo_exists() else None)
 
     def copy_file(self):
         p = self.app.s.profiles[self.pid]
@@ -718,16 +838,18 @@ class ShareDialog(Dialog):
 
 
 class ChangeProfilePasswordDialog(Dialog):
+    """Nowe hasło profilu (włącza dostęp hasłem albo zmienia hasło)."""
+
     def __init__(self, app, pid):
-        super().__init__(app, "Zmień hasło profilu")
+        super().__init__(app, "Hasło profilu")
         self.pid = pid
         p = app.s.profiles[pid]
         b = self.body
-        ttk.Label(b, text=f"Nowe hasło dla „{p.name}”", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(b, text="Po zmianie inne osoby, które mają ten profil, przy następnym otwarciu zostaną poproszone "
-                          "o nowe hasło. Zmień hasło np. wtedy, gdy ktoś przestał obsługiwać tego klienta.\n\n"
-                          "Uwaga: osoba, która wcześniej skopiowała plik, nadal otworzy tę starą kopię starym hasłem. "
-                          "Zmień też hasła do samych urządzeń, jeśli to konieczne.",
+        on = app.s.password_access(pid)
+        ttk.Label(b, text=f"{'Nowe hasło' if on else 'Dostęp hasłem'} dla „{p.name}”", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(b, text="Profil dostanie nowy klucz. Osoby z listy zachowają dostęp. Kto znał tylko stare hasło, "
+                          "straci dostęp do aktualnej wersji.\n\nKażdy, kto pozna nowe hasło, otworzy profil i zostanie "
+                          "dopisany do osób. Bezpieczniej dodawać osoby ich kodami.",
                   wraplength=app.px(440), justify="left").pack(anchor="w", pady=(8, 0))
         ttk.Label(b, text="NOWE HASŁO PROFILU", style="Field.TLabel").pack(anchor="w", pady=(14, 4))
         row = ttk.Frame(b)
@@ -737,23 +859,104 @@ class ChangeProfilePasswordDialog(Dialog):
         ttk.Button(row, text="Losuj", command=lambda: self.pw.set(profile_password())).pack(side="left", padx=(6, 0))
         self.err = ttk.Label(b, style="Error.TLabel")
         self.err.pack(anchor="w", pady=(6, 0))
-        self.btn, _ = self.buttons(("Zmień hasło", self.go, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
+        self.btn, _ = self.buttons(("Zapisz hasło", self.go, "Accent.TButton", "left"), ("Anuluj", self.close, None, "right"))
 
     def go(self):
         pw = self.pw.get()
-        if len(pw) < 8:
-            self.err.configure(text="Hasło profilu musi mieć co najmniej 8 znaków.")
+        problem = Session.check_profile_password(pw)
+        if problem:
+            self.err.configure(text=problem)
             return
-        self.btn.configure(text="Zmieniam…", state="disabled")
+        self.btn.configure(text="Zapisuję…", state="disabled")
         self.app.flush_save(self.pid)
 
         def done(_):
             self.close()
-            self.app.profile_ready(self.pid, "Zmieniono hasło profilu. Przekaż nowe hasło współpracownikom.")
+            self.app.after_profile_change(self.pid, "Zapisano nowe hasło profilu.")
 
         def fail(e):
             if self.winfo_exists():
                 self.err.configure(text=f"Nie udało się zmienić hasła: {e}")
-                self.btn.configure(text="Zmień hasło", state="normal")
+                self.btn.configure(text="Zapisz hasło", state="normal")
 
-        self.app.run_bg(lambda: self.app.s.change_profile_password(self.pid, pw), done, fail)
+        self.app.run_bg(lambda: self.app.s.set_password_access(self.pid, pw), done, fail)
+
+
+class LogDialog(Dialog):
+    """Dziennik zmian profilu: kto i kiedy dodał, zmienił, usunął albo skopiował hasło."""
+
+    def __init__(self, app, pid):
+        super().__init__(app, "Dziennik zmian", resizable=True)
+        p = app.s.profiles[pid]
+        b = self.body
+        ttk.Label(b, text=f"Dziennik zmian: {p.name}", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(b, text="Zapisy robi program każdej osoby z dostępem. Dziennik pokazuje uczciwe korzystanie z profilu; "
+                          "nie chroni przed kimś, kto celowo obchodzi program.", style="Small.TLabel",
+                  wraplength=app.px(640), justify="left").pack(anchor="w", pady=(4, 8))
+        fr = ttk.Frame(b)
+        fr.pack(fill="x")
+        self.q = tk.StringVar()
+        ttk.Entry(fr, textvariable=self.q, width=40).pack(side="left")
+        ttk.Label(fr, text="filtr: osoba, czynność albo wpis", style="Small.TLabel").pack(side="left", padx=(8, 0))
+        box = ttk.Frame(b)
+        box.pack(fill="both", expand=True, pady=(8, 0))
+        self.tree = ttk.Treeview(box, columns=("at", "who", "what", "item"), show="headings", height=16)
+        for col, text, w in (("at", "Kiedy", 150), ("who", "Kto", 150), ("what", "Co", 220), ("item", "Wpis / szczegóły", 220)):
+            self.tree.heading(col, text=text, anchor="w")
+            self.tree.column(col, width=app.px(w), anchor="w")
+        sb = ttk.Scrollbar(box, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        self.log = list(reversed(p.data.get("log") or []))
+        self.q.trace_add("write", lambda *a: self.fill())
+        self.fill()
+        self.buttons(("Zamknij", self.close, None, "right"))
+
+    def fill(self):
+        q = vault.norm(self.q.get())
+        self.tree.delete(*self.tree.get_children())
+        for x in self.log:
+            row = (vault.fmt_date(x.get("at", "")), x.get("who", ""), x.get("action", ""),
+                   x.get("title") or x.get("detail", ""))
+            if q and q not in vault.norm(" ".join(row)):
+                continue
+            self.tree.insert("", "end", values=row)
+
+
+class MyCodeDialog(Dialog):
+    """Twój kod do udostępniania profili i nazwa widoczna dla współpracowników."""
+
+    def __init__(self, app):
+        super().__init__(app, "Mój kod")
+        b = self.body
+        ident = app.s.identity
+        ttk.Label(b, text="Mój kod dla współpracowników", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(b, text="Wyślij ten kod osobie, która ma dostęp do profilu klienta. Doda Cię w oknie „Udostępnij” i "
+                          "nie będziecie musieli przekazywać sobie hasła. Kod nie jest tajny: zawiera tylko Twój klucz publiczny.",
+                  wraplength=app.px(460), justify="left").pack(anchor="w", pady=(6, 10))
+        ttk.Label(b, text="TWOJA NAZWA WIDOCZNA DLA INNYCH", style="Field.TLabel").pack(anchor="w", pady=(0, 4))
+        self.name = tk.StringVar(value=ident.get("name", ""))
+        row = ttk.Frame(b)
+        row.pack(fill="x")
+        ttk.Entry(row, textvariable=self.name).pack(side="left", fill="x", expand=True)
+        ttk.Button(row, text="Zapisz nazwę", command=self.save_name).pack(side="left", padx=(6, 0))
+        ttk.Label(b, text="KOD", style="Field.TLabel").pack(anchor="w", pady=(12, 4))
+        self.code_entry = readonly(b, app.s.my_code(), app)
+        self.code_entry.pack(fill="x")
+        ttk.Label(b, text=f"Odcisk klucza do sprawdzenia przez telefon: {crypto.fingerprint(ident['kid'])}",
+                  style="Small.TLabel").pack(anchor="w", pady=(6, 0))
+        self.buttons(("Kopiuj kod", lambda: app.copy(app.s.my_code(), "Twój kod"), "Accent.TButton", "left"),
+                     ("Zamknij", self.close, None, "right"))
+
+    def save_name(self):
+        self.app.s.set_my_name(self.name.get())
+        self.app.changed(ME)
+        for pid, p in self.app.s.profiles.items():
+            if p.file and p.file.dirty:
+                self.app.schedule_save(pid)
+        self.code_entry.configure(state="normal")
+        self.code_entry.delete(0, "end")
+        self.code_entry.insert(0, self.app.s.my_code())
+        self.code_entry.configure(state="readonly")
+        self.app.flash("Zapisano nazwę.")

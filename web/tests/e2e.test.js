@@ -74,12 +74,16 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(!/Kot123|jan.kowalski|Gmail/.test(text), 'plik nie zawiera jawnych danych');
   // niezależne odszyfrowanie w Node
   const o = JSON.parse(text);
-  const key = crypto.pbkdf2Sync(Buffer.from('Zielony kot je 4 jabłka!'.normalize('NFC')), Buffer.from(o.kdf.salt, 'base64'), o.kdf.iterations, 32, 'sha256');
+  const Argon2 = require('../src/argon2.js');
+  const pwBytes = Buffer.from('Zielony kot je 4 jabłka!'.normalize('NFC'));
+  const key = o.kdf.name === 'argon2id'
+    ? Buffer.from(Argon2.argon2id({ password: pwBytes, salt: Buffer.from(o.kdf.salt, 'base64'), t: o.kdf.t, m: o.kdf.m, p: o.kdf.p }))
+    : crypto.pbkdf2Sync(pwBytes, Buffer.from(o.kdf.salt, 'base64'), o.kdf.iterations, 32, 'sha256');
   const raw = Buffer.from(o.data, 'base64');
   const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(o.cipher.iv, 'base64'));
   d.setAAD(Buffer.from('sejf-vault/1')); d.setAuthTag(raw.subarray(raw.length - 16));
   const plain = JSON.parse(Buffer.concat([d.update(raw.subarray(0, raw.length - 16)), d.final()]).toString());
-  ok(plain.entries.length === 4 && o.kdf.iterations === 600000, 'Node odszyfrowuje plik (AES-256-GCM, PBKDF2 600k)');
+  ok(plain.entries.length === 4 && o.kdf.name === 'argon2id' && o.kdf.m === 65536 && o.version === 2, 'Node odszyfrowuje plik (AES-256-GCM, Argon2id 64 MiB)');
 
   // eksport CSV i reimport
   await page.click('#btn-exp'); await page.check('#e-ack');

@@ -69,6 +69,9 @@ def new_profile(name: str, info: dict | None = None) -> dict:
         "entries": [],
         "categories": [],
         "deleted": {},
+        "members": [],
+        "access": {"password": False, "updated": t},
+        "log": [],
     }
 
 
@@ -212,6 +215,12 @@ def normalize_profile(p: dict | None) -> dict:
     out["categories"] = [str(c) for c in (p.get("categories") or []) if c]
     out["entries"] = _entries(p)
     out["deleted"] = _deleted(p)
+    out["members"] = [dict(m) for m in (p.get("members") or []) if isinstance(m, dict) and m.get("id") and m.get("pub")]
+    for m in out["members"]:
+        m.setdefault("updated", m.get("added") or out["created"])
+    acc = p.get("access") if isinstance(p.get("access"), dict) else {}
+    out["access"] = {"password": bool(acc.get("password")), "updated": acc.get("updated") or out["created"]}
+    out["log"] = [dict(x) for x in (p.get("log") or []) if isinstance(x, dict) and x.get("id")]
     return out
 
 
@@ -265,6 +274,15 @@ def merge(remote: dict, local: dict) -> dict:
     if "profiles" in local or "profiles" in remote:  # osobisty sejf
         out["profiles"] = _merge_list(remote.get("profiles") or [], local.get("profiles") or [], tomb)
         out["security"] = _newer(remote.get("security") or {}, local.get("security") or {}) or {}
+    if "members" in local or "members" in remote:  # profil klienta: osoby z dostępem, dostęp hasłem, dziennik
+        out["members"] = _merge_list(remote.get("members") or [], local.get("members") or [], tomb)
+        out["access"] = _newer(remote.get("access") or {}, local.get("access") or {})
+        seen, log = set(), []
+        for x in sorted((remote.get("log") or []) + (local.get("log") or []), key=lambda x: x.get("at", "")):
+            if x["id"] not in seen:
+                seen.add(x["id"])
+                log.append(x)
+        out["log"] = log[-5000:]
     if "info" in local or "info" in remote:  # profil klienta
         r_info, l_info = remote.get("info") or {}, local.get("info") or {}
         out["info"] = _newer(r_info, l_info)

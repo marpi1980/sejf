@@ -261,7 +261,7 @@ dialog::backdrop { background: rgb(8 16 13 / .45); }
             <input id="lk-n1" type="password" autocomplete="new-password" required>
             <div class="tools"><button type="button" class="icon-btn" data-eye="lk-n1" title="Pokaż hasło" aria-label="Pokaż hasło"></button></div>
           </div>
-          <div class="meter" id="lk-meter" data-s="0"><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="m-label">Co najmniej 8 znaków. Najlepiej kilka losowych słów.</span></div>
+          <div class="meter" id="lk-meter" data-s="0"><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="m-label">Co najmniej 10 znaków. Najlepiej 4–5 losowych słów.</span></div>
         </div>
         <div>
           <label for="lk-n2">Powtórz hasło główne</label>
@@ -476,31 +476,52 @@ function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.h
 async function claudeUse(name) { try { return (window.claude && typeof window.claude.use === 'function') ? await window.claude.use(name) : null; } catch { return null; } }
 
 /* ====== Kryptografia ======
-   Plik: JSON z solą i wektorem IV. Klucz z hasła głównego: PBKDF2-SHA256 (600 000 iteracji).
+   Plik: JSON z parametrami klucza i wektorem IV. Klucz z hasła głównego: Argon2id (64 MiB, 2 przebiegi);
+   starsze pliki: PBKDF2-SHA256 (600 000 iteracji), przenoszone na Argon2id po odblokowaniu.
    Dane: AES-256-GCM (szyfrowanie z uwierzytelnieniem, wykrywa każdą zmianę pliku). */
-const FORMAT = 'sejf-vault', ITER = 600000, AAD = te.encode('sejf-vault/1');
-async function deriveKey(pw, salt, iter) {
-  const base = await crypto.subtle.importKey('raw', te.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+const FORMAT = 'sejf-vault', AAD = te.encode('sejf-vault/1');
+const ARGON = { name: 'argon2id', m: 65536, t: 2, p: 1 };
+const newKdf = () => ({ ...ARGON, salt: b64.enc(crypto.getRandomValues(new Uint8Array(16))) });
+const kdfIsCurrent = k => k.name === 'argon2id' && k.m >= ARGON.m && k.t >= ARGON.t;
+async function deriveKey(pw, kdf) {
+  const pwb = te.encode(pw.normalize('NFC'));
+  if (kdf.name === 'argon2id') {
+    await new Promise(r => setTimeout(r, 30)); // pozwól odświeżyć ekran („Odblokowuję…”) przed długim liczeniem
+    const raw = Argon2.argon2id({ password: pwb, salt: b64.dec(kdf.salt), t: kdf.t, m: kdf.m, p: kdf.p });
+    return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  }
+  const base = await crypto.subtle.importKey('raw', pwb, 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b64.dec(kdf.salt), iterations: kdf.iterations }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-async function seal(data, key, salt, iter) {
+async function seal(data, key, kdf) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD }, key, te.encode(JSON.stringify(data))));
-  return JSON.stringify({ format: FORMAT, version: 1, app: 'Sejf', kdf: { name: 'PBKDF2-SHA256', iterations: iter, salt: b64.enc(salt) }, cipher: { name: 'AES-256-GCM', iv: b64.enc(iv) }, data: b64.enc(ct) }, null, 1);
+  return JSON.stringify({ format: FORMAT, version: kdf.name === 'argon2id' ? 2 : 1, app: 'Sejf', kdf, cipher: { name: 'AES-256-GCM', iv: b64.enc(iv) }, data: b64.enc(ct) }, null, 1);
 }
 function envelope(text) {
   let o; try { o = JSON.parse(text); } catch { throw new Error('To nie jest plik sejfu. Wybierz plik utworzony w tej aplikacji.'); }
+  if (o && o.format === 'sejf-profile') throw new Error('To jest profil klienta. Profile klientów otworzysz w programie Sejf na Windows.');
   if (!o || o.format !== FORMAT) throw new Error('To nie jest plik sejfu. Wybierz plik utworzony w tej aplikacji.');
-  if (o.version > 1) throw new Error('Ten plik pochodzi z nowszej wersji aplikacji Sejf.');
-  const iter = +o.kdf.iterations; if (!(iter >= 100000 && iter <= 10000000)) throw new Error('Plik sejfu jest uszkodzony.');
-  return { salt: b64.dec(o.kdf.salt), iter, iv: b64.dec(o.cipher.iv), data: b64.dec(o.data) };
+  if (o.version > 2) throw new Error('Ten plik pochodzi z nowszej wersji aplikacji Sejf.');
+  const k = o.kdf || {};
+  let kdf;
+  if (k.name === 'argon2id') {
+    const m = +k.m, t = +k.t, p = +k.p;
+    if (!(m >= 8192 && m <= 1048576 && t >= 1 && t <= 20 && p >= 1 && p <= 16)) throw new Error('Plik sejfu jest uszkodzony.');
+    kdf = { name: 'argon2id', m, t, p, salt: k.salt };
+  } else {
+    const iter = +k.iterations; if (!(iter >= 100000 && iter <= 10000000)) throw new Error('Plik sejfu jest uszkodzony.');
+    kdf = { name: 'PBKDF2-SHA256', iterations: iter, salt: k.salt };
+  }
+  return { kdf, iv: b64.dec(o.cipher.iv), data: b64.dec(o.data) };
 }
 async function decryptEnv(env, key) {
   let pt; try { pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: env.iv, additionalData: AAD }, key, env.data); }
   catch { throw new Error('Nieprawidłowe hasło główne.'); }
   return normalizeVault(JSON.parse(td.decode(pt)));
 }
-async function openVault(text, pw) { const env = envelope(text); const key = await deriveKey(pw, env.salt, env.iter); return { data: await decryptEnv(env, key), key, salt: env.salt, iter: env.iter }; }
+async function openVault(text, pw) { const env = envelope(text); const key = await deriveKey(pw, env.kdf); return { data: await decryptEnv(env, key), key, kdf: env.kdf }; }
+const sameKdf = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 const DEFAULT_CATS = ['Bank i finanse', 'Poczta', 'Praca', 'Społeczności', 'Sklepy', 'Rozrywka', 'Inne'];
@@ -604,7 +625,7 @@ function toCSV(entries) {
 
 /* ====== Przechowywanie ====== */
 const S = {
-  data: null, key: null, salt: null, iter: ITER,
+  data: null, key: null, kdf: null,
   handle: null, fileName: '', lastMod: 0, cipher: null, dirty: false, saving: false, saveErr: '', savedAt: null, conflict: false,
   fs: (() => { try { return 'showOpenFilePicker' in window && window.self === window.top; } catch { return false; } })(),
   filter: { type: 'all' }, q: '', sel: null, editing: null, confirmDel: false, saveTimer: null
@@ -643,7 +664,7 @@ async function persist(force = false) {
   clearTimeout(S.saveTimer); S.saveTimer = null;
   if (!S.data) return;
   S.saving = true; renderSave();
-  const text = await seal(S.data, S.key, S.salt, S.iter);
+  const text = await seal(S.data, S.key, S.kdf);
   S.cipher = text;
   if (!S.handle) { S.dirty = true; S.saving = false; renderSave(); return; }
   try {
@@ -666,7 +687,7 @@ async function checkExternal() {
     if (!S.lastMod || f.lastModified === S.lastMod) return;
     if (S.dirty) { S.conflict = true; renderSave(); return; }
     const env = envelope(await f.text());
-    if (env.iter !== S.iter || !sameBytes(env.salt, S.salt)) { await lock(); toast('Hasło główne zmieniono na innym urządzeniu. Odblokuj sejf nowym hasłem.', 6000); return; }
+    if (!sameKdf(env.kdf, S.kdf)) { await lock(); toast('Hasło główne zmieniono na innym urządzeniu. Odblokuj sejf nowym hasłem.', 6000); return; }
     S.data = await decryptEnv(env, S.key); S.lastMod = f.lastModified; S.cipher = null;
     if (S.sel && !S.data.entries.some(e => e.id === S.sel)) S.sel = null;
     if (!S.editing) render(); toast('Wczytano zmiany z innego urządzenia.');
@@ -700,11 +721,11 @@ $('#file-in').onchange = async e => {
   try { envelope(text); } catch (err) { toast(err.message, 5000); return; }
   S.handle = null; S.cipher = text; S.fileName = f.name; S.dirty = false; showLock('lk-unlock');
 };
-$('#lk-new').onclick = () => { $('#lk-n1').value = ''; $('#lk-n2').value = ''; setMeter($('#lk-meter'), '', 'Co najmniej 8 znaków. Najlepiej kilka losowych słów.'); showLock('lk-create'); };
+$('#lk-new').onclick = () => { $('#lk-n1').value = ''; $('#lk-n2').value = ''; setMeter($('#lk-meter'), '', 'Co najmniej 10 znaków. Najlepiej 4–5 losowych słów.'); showLock('lk-create'); };
 $('#lk-back').onclick = () => showLock(S.handle || S.cipher ? 'lk-unlock' : 'lk-home');
 $('#lk-other').onclick = async () => { await idb.del('last'); S.handle = null; S.cipher = null; S.fileName = ''; S.dirty = false; showLock('lk-home'); };
 $('#lk-dl').onclick = async () => { if (await saveFile(S.fileName || 'hasla.sejf.json', S.cipher)) { S.dirty = false; $('#lk-dl').hidden = true; toast('Zapisano plik.'); } };
-$('#lk-n1').oninput = e => setMeter($('#lk-meter'), e.target.value, 'Co najmniej 8 znaków. Najlepiej kilka losowych słów.');
+$('#lk-n1').oninput = e => setMeter($('#lk-meter'), e.target.value, 'Co najmniej 10 znaków. Najlepiej 4–5 losowych słów.');
 
 $('#lk-unlock').onsubmit = async e => {
   e.preventDefault();
@@ -714,8 +735,11 @@ $('#lk-unlock').onsubmit = async e => {
     const text = S.handle ? await readHandle(S.handle) : S.cipher;
     if (!text) throw new Error('Najpierw wybierz plik sejfu.');
     const v = await openVault(text, pw);
-    Object.assign(S, { data: v.data, key: v.key, salt: v.salt, iter: v.iter, cipher: text, saveErr: '', conflict: false });
+    Object.assign(S, { data: v.data, key: v.key, kdf: v.kdf, cipher: text, saveErr: '', conflict: false });
+    const upgrade = !kdfIsCurrent(S.kdf);
+    if (upgrade) { S.kdf = newKdf(); S.key = await deriveKey(pw, S.kdf); }  // przeniesienie na Argon2id
     $('#lk-pw').value = ''; enterMain();
+    if (upgrade) { changed(); toast('Sejf przeniesiono na silniejsze zabezpieczenie hasła (Argon2id).', 6000); }
   } catch (ex) { err.textContent = ex.message; err.hidden = false; $('#lk-pw').select(); }
   finally { busy(btn, false); }
 };
@@ -724,7 +748,7 @@ $('#lk-create').onsubmit = async e => {
   e.preventDefault();
   const p1 = $('#lk-n1').value, p2 = $('#lk-n2').value, err = $('#lk-cerr'), btn = $('#lk-create-go');
   err.hidden = true;
-  if ([...p1].length < 8) { err.textContent = 'Hasło główne musi mieć co najmniej 8 znaków.'; err.hidden = false; return; }
+  if ([...p1].length < 10 || strength(p1).score < 4) { err.textContent = 'Hasło główne jest za słabe: co najmniej 10 znaków i ocena „Silne”. Najlepiej 4–5 losowych słów.'; err.hidden = false; return; }
   if (p1 !== p2) { err.textContent = 'Hasła się różnią. Wpisz to samo hasło w obu polach.'; err.hidden = false; return; }
   let fh = null;
   if (S.fs) {
@@ -733,8 +757,8 @@ $('#lk-create').onsubmit = async e => {
   }
   busy(btn, true, 'Tworzę sejf…');
   try {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    Object.assign(S, { data: newVault(), salt, iter: ITER, key: await deriveKey(p1, salt, ITER), handle: fh, fileName: fh ? fh.name : 'hasla.sejf.json', lastMod: 0, dirty: true, conflict: false, saveErr: '' });
+    const kdf = newKdf();
+    Object.assign(S, { data: newVault(), kdf, key: await deriveKey(p1, kdf), handle: fh, fileName: fh ? fh.name : 'hasla.sejf.json', lastMod: 0, dirty: true, conflict: false, saveErr: '' });
     if (fh) await idb.set('last', fh);
     await persist(true);
     $('#lk-n1').value = ''; $('#lk-n2').value = '';
@@ -1007,7 +1031,7 @@ $('#i-go').onclick = () => {
 
 /* ====== Eksport ====== */
 $('#e-ack').onchange = e => { $('#e-csv').disabled = !e.target.checked; };
-$('#e-backup').onclick = async () => { await flush(); const text = S.cipher || await seal(S.data, S.key, S.salt, S.iter); if (await saveFile(`hasla-kopia-${new Date().toISOString().slice(0, 10)}.json`, text)) toast('Zapisano zaszyfrowaną kopię.'); };
+$('#e-backup').onclick = async () => { await flush(); const text = S.cipher || await seal(S.data, S.key, S.kdf); if (await saveFile(`hasla-kopia-${new Date().toISOString().slice(0, 10)}.json`, text)) toast('Zapisano zaszyfrowaną kopię.'); };
 $('#e-csv').onclick = async () => { if (await saveFile(`hasla-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(S.data.entries))) { toast('Zapisano CSV. Usuń go po użyciu.', 5000); $('#e-ack').checked = false; $('#e-csv').disabled = true; } };
 
 /* ====== Ustawienia ====== */
@@ -1018,15 +1042,14 @@ $('#s-new').oninput = e => setMeter($('#s-meter'), e.target.value);
 $('#s-change').onclick = async () => {
   const err = $('#s-err'), btn = $('#s-change'), cur = $('#s-cur').value, n1 = $('#s-new').value, n2 = $('#s-new2').value;
   err.hidden = true;
-  if ([...n1].length < 8) { err.textContent = 'Nowe hasło główne musi mieć co najmniej 8 znaków.'; err.hidden = false; return; }
+  if ([...n1].length < 10 || strength(n1).score < 4) { err.textContent = 'Nowe hasło główne jest za słabe: co najmniej 10 znaków i ocena „Silne”.'; err.hidden = false; return; }
   if (n1 !== n2) { err.textContent = 'Nowe hasła się różnią.'; err.hidden = false; return; }
   busy(btn, true, 'Zmieniam…');
   try {
     await flush();
-    const check = await deriveKey(cur, S.salt, S.iter);
-    await decryptEnv(envelope(S.cipher || await seal(S.data, S.key, S.salt, S.iter)), check).catch(() => { throw new Error('Obecne hasło główne jest nieprawidłowe.'); });
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    S.salt = salt; S.iter = ITER; S.key = await deriveKey(n1, salt, ITER);
+    const check = await deriveKey(cur, S.kdf);
+    await decryptEnv(envelope(S.cipher || await seal(S.data, S.key, S.kdf)), check).catch(() => { throw new Error('Obecne hasło główne jest nieprawidłowe.'); });
+    S.kdf = newKdf(); S.key = await deriveKey(n1, S.kdf);
     await persist(); $('#dlg-set').close();
     toast(S.handle ? 'Zmieniono hasło główne.' : 'Zmieniono hasło główne. Pobierz plik ze zmianami.', 5000);
   } catch (e) { err.textContent = e.message; err.hidden = false; }

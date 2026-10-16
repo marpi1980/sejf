@@ -11,7 +11,8 @@ from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import connect, crypto, csvio, storage, vault
 from .clipboard import Clipboard
-from .dialogs import (AskStringDialog, ChangeProfilePasswordDialog, ExportDialog, GeneratorDialog, HistoryDialog,
+from .dialogs import (AskStringDialog, ChangeProfilePasswordDialog, ExportDialog, GeneratorDialog, HistoryDialog, LogDialog,
+                      MyCodeDialog,
                       ImportDialog, ImportPreview, NewProfileDialog, ProfileInfoDialog, ProfilePasswordDialog,
                       SettingsDialog, ShareDialog)
 from .icon import ICON_PNG_B64
@@ -175,6 +176,8 @@ class App:
             self.show_lock("totp")
         else:
             self.enter_main()
+        if self.s.upgraded and self.main:
+            self.flash("Sejf przeniesiono na silniejsze zabezpieczenie hasła (Argon2id).", 8000)
 
     def enter_main(self, keep: bool = False):
         if not keep:
@@ -337,12 +340,15 @@ class App:
         self.refresh_status()
 
     # --- schowek i połączenia ----------------------------------------------------------------
-    def copy(self, text: str, what: str, secret: bool = False):
+    def copy(self, text: str, what: str, secret: bool = False, log=None):
+        """Kopiuje do schowka. ``log=(sid, wpis)``: zapis w dzienniku profilu klienta."""
         try:
             self.clip.set(text, private=secret)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Schowek", f"Nie udało się skopiować: {e}", parent=self.root)
             return
+        if log and log[0] != ME and secret:
+            self.log(log[0], f"skopiował {what}", log[1])
         sec = int(self.s.data["settings"].get("clipSec", 0)) if self.s.unlocked else 0
         if secret and sec:
             if self.clip_job:
@@ -359,8 +365,15 @@ class App:
             self.flash("Wyczyszczono schowek.")
         self.clip_text = None
 
-    def connect(self, e, action):
+    def log(self, sid, action, entry=None, detail=""):
+        if sid != ME and self.s.unlocked and self.s.source(sid):
+            self.s.log(sid, action, entry, detail)
+            self.schedule_save(sid)
+
+    def connect(self, e, action, sid=None):
         secret = e.get("password") if action.copy_key == "password" else (e.get("extra") or {}).get(action.copy_key)
+        if sid:
+            self.log(sid, f"połączył się: {action.label}", e)
         try:
             if action.copy_password and secret:
                 self.copy(secret, "hasło", secret=True)
@@ -380,11 +393,34 @@ class App:
     def _activity(self, _e=None):
         self.last_act = time.monotonic()
 
+    def system_locked(self) -> bool:
+        """Czy ekran Windows jest zablokowany (Win+L)? Pulpit wejściowy jest wtedy niedostępny."""
+        if sys.platform != "win32":
+            return False
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            h = user32.OpenInputDesktop(0, False, 0x0100)  # DESKTOP_SWITCHDESKTOP
+            if not h:
+                return True
+            user32.CloseDesktop(h)
+        except Exception:  # noqa: BLE001
+            return False
+        return False
+
     def tick(self):
+        now = time.time()
+        gap = now - getattr(self, "last_tick", now)
+        self.last_tick = now
         try:
             if self.s.unlocked and self.main:
                 minutes = int(self.s.data["settings"].get("autoLockMin", 0))
-                if minutes and time.monotonic() - self.last_act > minutes * 60:
+                on_system = self.s.data["settings"].get("lockOnSystem", True)
+                if on_system and gap > 30:  # komputer spał albo był wstrzymany
+                    self.lock(message="Sejf został zablokowany, bo komputer był uśpiony.")
+                elif on_system and self.system_locked():
+                    self.lock(message="Sejf został zablokowany razem z ekranem Windows.")
+                elif minutes and time.monotonic() - self.last_act > minutes * 60:
                     self.lock(message="Sejf został zablokowany po okresie bezczynności.")
                 elif time.monotonic() - self.last_check > CHECK_EVERY and not self.save_jobs:
                     self.last_check = time.monotonic()
@@ -472,7 +508,38 @@ class App:
             self.profile_ready(known.id)
             return None
         del env
-        return ProfilePasswordDialog(self, path).show()
+        box = {}
+
+        def fail(e):
+            if isinstance(e, (crypto.NoAccess, PasswordChanged)):
+                box["dlg"] = ProfilePasswordDialog(self, path).show()
+            else:
+                messagebox.showerror("Profil klienta", str(e), parent=self.root)
+
+        self.run_bg(lambda: self.s.add_profile(path), lambda p: self.profile_ready(p.id, f"Dodano profil „{p.name}”."), fail)
+        return box
+
+    def after_profile_change(self, pid, message=""):
+        self.schedule_save(ME)
+        if self.main:
+            self.main.refresh(keep_detail=self.main.detail.editing is None)
+        if message:
+            self.flash(message, 6000)
+
+    def retry_profile(self, pid):
+        p = self.s.profiles.get(pid)
+        if p:
+            p.error, p.message = "loading", ""
+            if self.main:
+                self.main.refresh()
+            self.load_profiles([pid])
+
+    def open_log(self, pid):
+        self.flush_save(pid)
+        return LogDialog(self, pid).show()
+
+    def open_my_code(self):
+        return MyCodeDialog(self).show()
 
     def profile_ready(self, pid, message=""):
         if self.main:
@@ -577,6 +644,7 @@ class App:
             if cat and cat not in data.setdefault("categories", []):
                 data["categories"].append(cat)
         self.changed(sid)
+        self.log(sid, f"zaimportował {vault.wpisy(len(entries))}")
         if self.main:
             self.main.scope_iid = ME if sid == ME else f"c|{sid}"
             self.main.refresh()

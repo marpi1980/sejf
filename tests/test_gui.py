@@ -1,8 +1,8 @@
 """Test okienkowego interfejsu na prawdziwym Tk (uruchamiany na Windows w GitHub Actions).
 
-Ścieżka: nowy sejf → własny wpis → profil klienta → serwer, switch i VPN → import listy urządzeń →
-udostępnienie → współpracownik dodaje wpis w tym samym pliku → weryfikacja dwuetapowa → blokada
-→ odblokowanie z kodem → zmiana hasła profilu przez inną osobę. Po drodze zapisuje zrzuty ekranu
+Ścieżka: nowy sejf → własny wpis → profil klienta → serwer, komputer, switch i VPN → import listy
+urządzeń → dodanie współpracowniczki jej kodem → wspólna praca → weryfikacja dwuetapowa → odebranie
+i przywrócenie dostępu → dostęp hasłem → dziennik → blokada razem z Windows. Po drodze zapisuje zrzuty ekranu
 do katalogu test-results/.
 """
 import os
@@ -104,7 +104,8 @@ class GuiFlow(unittest.TestCase):
 
     def test_full_flow(self):
         from sejf import totp, vault
-        from sejf.dialogs import NewProfileDialog, ProfilePasswordDialog, ShareDialog, TotpSetupDialog
+        from sejf.dialogs import (ChangeProfilePasswordDialog, LogDialog, MyCodeDialog, NewProfileDialog,
+                                  ShareDialog, TotpSetupDialog)
         from sejf.kinds import BY_KEY
         from sejf.session import ME, Session
         app = self.app
@@ -138,7 +139,7 @@ class GuiFlow(unittest.TestCase):
         prof_path = os.path.join(self.shared, "ACME.sejfklient")
         dlg.custom_path = True
         dlg.path.set(prof_path)
-        profile_pw = dlg.pw.get()
+        self.assertFalse(dlg.use_pw.get())  # domyślnie bez dostępu hasłem
         self.pump()
         shot(dlg, "03-nowy-klient")
         dlg.create()
@@ -269,24 +270,36 @@ class GuiFlow(unittest.TestCase):
         main.search.set("")
         self.pump()
 
-        # udostępnienie
-        sh = ShareDialog(app, pid).show()
-        self.pump()
-        shot(sh, "10-udostepnij")
-        sh.close()
-
-        # --- współpracownik pracuje na tym samym pliku ---------------------------------
+        # --- udostępnienie współpracowniczce jej kodem, bez hasła ------------------------------
         anna = Session({})
         anna.create(os.path.join(self.tmp, "anna.sejf.json"), "hasło Anny 2026")
-        pa = anna.add_profile(prof_path, profile_pw)
+        anna.set_my_name("Anna Nowak")
+        with self.assertRaises(Exception):
+            anna.add_profile(prof_path)  # jeszcze nie ma dostępu
+        sh = ShareDialog(app, pid).show()
+        sh.code.set(anna.my_code())
+        sh.add()
+        self.wait(lambda: len(app.s.members(pid)) == 2, msg="dodanie osoby")
+        self.pump(0.3)
+        sh = next(d for d in app.dialogs if isinstance(d, ShareDialog))
+        shot(sh, "10-udostepnij")
+        sh.close()
+        self.saved()
+        pa = anna.add_profile(prof_path)  # klucz Anny, bez hasła
+        self.assertEqual(pa.file.opened_by, "identity")
         pa.file.data["entries"].append(vault.normalize_entry(vault.new_entry(
             type="wifi", title="Wi-Fi biuro", password="Biuro-WiFi-2026", extra={"ssid": "ACME-Biuro", "security": "WPA2-Personal"})))
+        anna.log(pa.id, "dodał wpis", pa.file.data["entries"][-1])
         pa.file.touch()
         pa.file.save()
         self.bump(prof_path)
         app.check_external()
         self.pump(0.3)
         self.assertTrue(any(e["title"] == "Wi-Fi biuro" for e in app.s.profiles[pid].data["entries"]))
+        md = MyCodeDialog(app).show()
+        self.pump()
+        shot(md, "10b-moj-kod")
+        md.close()
 
         # --- weryfikacja dwuetapowa ---------------------------------------------------------
         ts = TotpSetupDialog(app).show()
@@ -325,31 +338,58 @@ class GuiFlow(unittest.TestCase):
         self.wait(lambda: app.main is not None, msg="odblokowanie bez kodu")
         self.wait(lambda: app.s.profiles[pid].file is not None, msg="profil po odblokowaniu")
 
-        # --- inna osoba zmienia hasło profilu -------------------------------------------------
-        anna.change_profile_password(pa.id, "nowe hasło ACME 2026")
+        # --- Anna odbiera dostęp, a potem przywraca --------------------------------------------
+        anna.remove_member(pa.id, app.s.identity["kid"])
         self.bump(prof_path)
         app.check_external()
         self.pump(0.3)
         self.assertEqual(app.s.profiles[pid].error, "password")
         app.main.select_scope(f"c|{pid}")
         self.pump(0.3)
-        shot(self.root, "14-profil-nowe-haslo")
-        d = app.relink_password(pid)
-        d.pw.set("nowe hasło ACME 2026")
-        d.go()
-        self.wait(lambda: app.s.profiles[pid].file is not None, msg="nowe hasło profilu")
-        self.assertEqual(app.s.profile_password(pid), "nowe hasło ACME 2026")
+        shot(self.root, "14-brak-dostepu")
+        anna.add_member(pa.id, app.s.my_code())
+        self.bump(prof_path)
+        app.retry_profile(pid)
+        self.wait(lambda: app.s.profiles[pid].file is not None, msg="przywrócony dostęp")
 
-        # dodanie istniejącego profilu przez Annę z jej programem: tu tylko ścieżka okna
+        # --- dostęp hasłem: włączenie, osoba z hasłem dołącza, wyłączenie ------------------------
+        d = ChangeProfilePasswordDialog(app, pid).show()
+        d.pw.set("krótkie")
+        d.go()
+        self.assertIn("12 znaków", d.err.cget("text"))
+        d.pw.set("Hasło-Profilu-ACME-2026")
+        d.go()
+        self.wait(lambda: app.s.password_access(pid), msg="włączenie dostępu hasłem")
+        self.saved()
+        kasia = Session({})
+        kasia.create(os.path.join(self.tmp, "kasia.sejf.json"), "hasło Kasi 2026")
+        kasia.add_profile(prof_path, "Hasło-Profilu-ACME-2026")
+        self.bump(prof_path)
+        app.check_external()
+        self.wait(lambda: len(app.s.members(pid)) == 3, msg="Kasia na liście osób")
+
+        # --- dodanie profilu z pliku po usunięciu z programu: kluczem, bez pytania o hasło ----------
         app.s.forget_profile(pid)
         app.main.refresh()
-        d = ProfilePasswordDialog(app, prof_path).show()
-        d.pw.set("złe hasło")
-        d.go()
-        self.wait(lambda: "Nieprawidłowe" in d.err.cget("text"), msg="złe hasło profilu")
-        d.pw.set("nowe hasło ACME 2026")
-        d.go()
+        app.add_profile_path(prof_path)
         self.wait(lambda: pid in app.s.profiles and app.s.profiles[pid].file is not None, msg="ponowne dodanie profilu")
+
+        # --- dziennik zmian ---------------------------------------------------------------------
+        bank = next(e for e in app.s.profiles[pid].data["entries"] if e["title"] == "Bank PKO")
+        app.copy(bank["password"], "hasło", secret=True, log=(pid, bank))
+        self.saved()
+        actions = [x["action"] for x in app.s.profiles[pid].data["log"]]
+        for expected in ("utworzył profil", "dodał wpis", "zaimportował 3 wpisy", "dodał osobę", "odebrał dostęp",
+                         "dołączył do profilu (hasłem)", "skopiował hasło"):
+            self.assertIn(expected, actions)
+        self.assertIn("Anna Nowak", [x["who"] for x in app.s.profiles[pid].data["log"]])
+        lg = LogDialog(app, pid).show()
+        self.pump()
+        shot(lg, "16-dziennik")
+        lg.close()
+        app.main.select_scope(f"c|{pid}")
+        self.pump(0.3)
+        shot(self.root, "06b-karta-klienta-osoby")
 
         # ciemny motyw na szczegółach switcha
         app.set_theme("dark")
@@ -360,6 +400,22 @@ class GuiFlow(unittest.TestCase):
         app.set_theme("light")
         self.saved()
         self.assertEqual(self.errors, [])
+
+        # --- blokada razem z Windows i po uśpieniu ------------------------------------------------
+        app.system_locked = lambda: True
+        app.tick()
+        self.assertIsNone(app.s.main)
+        self.assertIn("ekranem Windows", app.view.message)
+        del app.system_locked
+        app.view.pw.set(PW)
+        app.view.unlock()
+        self.wait(lambda: app.main is not None, msg="odblokowanie po blokadzie Windows")
+        app.last_tick = time.time() - 120
+        app.tick()
+        self.assertIn("uśpiony", app.view.message)
+        app.view.pw.set(PW)
+        app.view.unlock()
+        self.wait(lambda: app.main is not None, msg="odblokowanie po uśpieniu")
 
         # plik z wersji przeglądarkowej nadal się otwiera
         app.lock()
@@ -372,6 +428,7 @@ class GuiFlow(unittest.TestCase):
         app.view.unlock()
         self.wait(lambda: app.main is not None, msg="otwarcie pliku z wersji web")
         self.assertEqual(len(app.s.data["entries"]), 4)
+        self.assertTrue(app.s.upgraded)  # stary plik przeniesiony na Argon2id
         app.lock()
         self.assertEqual(ME, "me")
 
