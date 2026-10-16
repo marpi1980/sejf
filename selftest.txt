@@ -1,0 +1,5 @@
+szyfrowanie i profile: OK
+weryfikacja dwuetapowa: OK
+okno: OK
+motyw i kody QR: OK
+WYNIK: OK

@@ -1,0 +1,66 @@
+test_argon2id_rfc9106 (tests.test_core.CryptoTests.test_argon2id_rfc9106) ... ok
+test_identity_code_and_wrapping (tests.test_core.CryptoTests.test_identity_code_and_wrapping) ... ok
+test_not_a_vault (tests.test_core.CryptoTests.test_not_a_vault) ... ok
+test_opens_argon2_file_from_web_version (tests.test_core.CryptoTests.test_opens_argon2_file_from_web_version)
+Plik zaszyfrowany Argon2id w przegl\u0105darce (JavaScript) otwiera si\u0119 w programie (Python). ... ok
+test_opens_file_from_web_version (tests.test_core.CryptoTests.test_opens_file_from_web_version)
+Plik utworzony w przegl\u0105darce (web/) otwiera si\u0119 w programie na Windows. ... ok
+test_round_trip (tests.test_core.CryptoTests.test_round_trip) ... ok
+test_tampering_detected (tests.test_core.CryptoTests.test_tampering_detected) ... ok
+test_wrong_password (tests.test_core.CryptoTests.test_wrong_password) ... ok
+test_bitwarden_and_semicolon (tests.test_core.CsvTests.test_bitwarden_and_semicolon) ... ok
+test_chrome_import (tests.test_core.CsvTests.test_chrome_import) ... ok
+test_cp1250 (tests.test_core.CsvTests.test_cp1250) ... ok
+test_export_reimport (tests.test_core.CsvTests.test_export_reimport) ... ok
+test_keepass_groups (tests.test_core.CsvTests.test_keepass_groups) ... ok
+test_missing_password_column (tests.test_core.CsvTests.test_missing_password_column) ... ok
+test_all_groups_present (tests.test_core.GeneratorTests.test_all_groups_present) ... ok
+test_strength (tests.test_core.GeneratorTests.test_strength) ... ok
+test_unique (tests.test_core.GeneratorTests.test_unique) ... ok
+test_computer (tests.test_core.KindsAndConnectTests.test_computer) ... ok
+test_connect_plans (tests.test_core.KindsAndConnectTests.test_connect_plans) ... ok
+test_csv_round_trip_keeps_types (tests.test_core.KindsAndConnectTests.test_csv_round_trip_keeps_types) ... ok
+test_expiry (tests.test_core.KindsAndConnectTests.test_expiry) ... ok
+test_hidden_and_custom_fields (tests.test_core.KindsAndConnectTests.test_hidden_and_custom_fields) ... ok
+test_inventory_csv (tests.test_core.KindsAndConnectTests.test_inventory_csv) ... ok
+test_kinds_have_unique_keys_and_fields (tests.test_core.KindsAndConnectTests.test_kinds_have_unique_keys_and_fields) ... ok
+test_management_console (tests.test_core.KindsAndConnectTests.test_management_console) ... ok
+test_multiple_accounts (tests.test_core.KindsAndConnectTests.test_multiple_accounts) ... ok
+test_search_includes_extra_but_not_secrets (tests.test_core.KindsAndConnectTests.test_search_includes_extra_but_not_secrets) ... ok
+test_add_member_by_code_without_password (tests.test_core.ProfileTests.test_add_member_by_code_without_password) ... ok
+test_forget_keeps_file (tests.test_core.ProfileTests.test_forget_keeps_file) ... ok
+test_legacy_profile_is_upgraded (tests.test_core.ProfileTests.test_legacy_profile_is_upgraded)
+Profil z wersji 3.1 (PBKDF2, wspólne has\u0142o) przechodzi na klucze osób przy otwarciu. ... ok
+test_log_from_two_people_is_merged (tests.test_core.ProfileTests.test_log_from_two_people_is_merged) ... ok
+test_missing_file_and_relink (tests.test_core.ProfileTests.test_missing_file_and_relink) ... ok
+test_move_entry_between_sources (tests.test_core.ProfileTests.test_move_entry_between_sources) ... ok
+test_password_change_keeps_members_and_locks_out_others (tests.test_core.ProfileTests.test_password_change_keeps_members_and_locks_out_others) ... ok
+test_profile_info_and_name (tests.test_core.ProfileTests.test_profile_info_and_name) ... ok
+test_profile_is_separate_file_opened_without_password (tests.test_core.ProfileTests.test_profile_is_separate_file_opened_without_password) ... ok
+test_relink_rejects_other_profile (tests.test_core.ProfileTests.test_relink_rejects_other_profile) ... ok
+test_remove_member_revokes_access (tests.test_core.ProfileTests.test_remove_member_revokes_access) ... ok
+test_share_with_colleague_and_work_together (tests.test_core.ProfileTests.test_share_with_colleague_and_work_together) ... ok
+test_wrong_file_kind (tests.test_core.ProfileTests.test_wrong_file_kind) ... ok
+test_change_password_requires_current (tests.test_core.SessionTests.test_change_password_requires_current) ... ok
+test_concurrent_changes_are_merged (tests.test_core.SessionTests.test_concurrent_changes_are_merged) ... ok
+test_create_unlock (tests.test_core.SessionTests.test_create_unlock) ... ok
+test_external_change_reloaded (tests.test_core.SessionTests.test_external_change_reloaded) ... ok
+test_legacy_vault_gets_stable_uid (tests.test_core.SessionTests.test_legacy_vault_gets_stable_uid) ... ok
+test_new_password_rules (tests.test_core.SessionTests.test_new_password_rules) ... ok
+test_password_changed_elsewhere (tests.test_core.SessionTests.test_password_changed_elsewhere) ... ok
+test_vault_moves_to_argon2id (tests.test_core.SessionTests.test_vault_moves_to_argon2id) ... ok
+test_periodic_check_per_device (tests.test_core.TotpTests.test_periodic_check_per_device) ... ok
+test_rfc6238_vectors (tests.test_core.TotpTests.test_rfc6238_vectors) ... ok
+test_uri (tests.test_core.TotpTests.test_uri) ... ok
+test_verify_window (tests.test_core.TotpTests.test_verify_window) ... ok
+test_filters (tests.test_core.VaultTests.test_filters) ... ok
+test_history (tests.test_core.VaultTests.test_history) ... ok
+test_plural (tests.test_core.VaultTests.test_plural) ... ok
+test_search_without_polish_letters (tests.test_core.VaultTests.test_search_without_polish_letters) ... ok
+test_urls (tests.test_core.VaultTests.test_urls) ... ok
+test_full_flow (tests.test_gui.GuiFlow.test_full_flow) ... ok
+
+----------------------------------------------------------------------
+Ran 58 tests in 44.634s
+
+OK
